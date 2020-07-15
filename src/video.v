@@ -30,45 +30,6 @@ module video (
   wire [7:0] hb2 = hb[6:1];
   wire [7:0] vb2 = vb[6:1];
 
-  // Default palette
-  localparam transparent  = 24'h000000;
-  localparam black        = 24'h010101;
-  localparam medium_green = 24'h3eb849;
-  localparam light_green  = 24'h74d07d;
-  localparam dark_blue    = 24'h5955e0;
-  localparam light_blue   = 24'h8076f1;
-  localparam dark_red     = 24'h993e31;
-  localparam cyan         = 24'h65dbef;
-  localparam medium_red   = 24'hdb6559;
-  localparam light_red    = 24'hff897d;
-  localparam dark_yellow  = 24'hccc35e;
-  localparam light_yellow = 24'hded087;
-  localparam dark_green   = 24'h3aa241;
-  localparam magenta      = 24'hb766b5;
-  localparam gray         = 24'h777777;
-  localparam white        = 24'hffffff;
-
-  reg [23:0] colors [0:15];
-
-  initial begin
-    colors[0]  <= transparent;
-    colors[1]  <= black;
-    colors[2]  <= medium_green;
-    colors[3]  <= light_green;
-    colors[4]  <= dark_blue;
-    colors[5]  <= light_blue;
-    colors[6]  <= dark_red;
-    colors[7]  <= cyan;
-    colors[8]  <= medium_red;
-    colors[9]  <= light_red;
-    colors[10] <= dark_yellow;
-    colors[11] <= light_yellow;
-    colors[12] <= dark_green;
-    colors[13] <= magenta;
-    colors[14] <= gray;
-    colors[15] <= white;
-  end
-
   reg [9:0] hc = 0;
   reg [9:0] vc = 0;
 
@@ -99,7 +60,7 @@ module video (
   wire border = hBorder || vBorder;
 
   // Read 2 pixels at a time
-  reg [7:0] pixels0, pixels1;;
+  reg [7:0] pixels0, pixels1;
   wire [3:0] pixel = {1'b0, pixels0[7], pixels1[7], pixels1[6]};
 
   always @(posedge clk) begin
