@@ -5,7 +5,8 @@ module ql
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
-  parameter c_diag        = 0  // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_diag        = 0, // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_mhz         = 27000000 // Clock speed of CPU clock
 )
 (
   input         clk25_mhz,
@@ -183,8 +184,19 @@ module ql
   wire acia_cs  = !vma_n && cpu_a[3:2] == 0;
   wire audio_cs = !vma_n && cpu_a[3:1] == 2;
   wire keybd_cs = !vma_n && cpu_a[3:1] == 3;
+  wire timer_cs = !vma_n && cpu_a[3:2] == 2;
   wire [7:0] acia_dout;
   wire [63:0] kbd_matrix;
+  reg  [31:0] timer = 0;
+  reg  [24:0] prescaler;
+
+  always @(posedge clk_cpu) begin
+    prescaler <= prescaler + 1;
+    if (prescaler == (c_mhz - 1)) begin
+      prescaler <= 0;
+      timer <= timer + 1;
+    end
+  end
 
   // Address 0x600000 to 6fffff used for peripherals
   assign vpa_n = !(cpu_a[23:18]==6'b011000) | cpu_as_n;
@@ -192,14 +204,16 @@ module ql
   generate
   if(c_sdram) // SDRAM as ROM and RAM, BRAM as video
   assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
+                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
                    keybd_cs          ? kbd_matrix[{cpu_a[6:4], 3'b0} + 7 -: 8] :
-  		                       ram_dout;
+                                       ram_dout;
   else // BRAM all
   assign cpu_din = cpu_a[17:15] < 2  ? rom_dout :
                    cpu_a[17:15] == 2 ? vga_dout :
-		   acia_cs           ? {8'd0, acia_dout} :
+                   acia_cs           ? {8'd0, acia_dout} :
+                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
                    keybd_cs          ? kbd_matrix[{cpu_a[6:4], 3'b0} + 7 -: 8] :
-   		                       ram_dout;
+                                       ram_dout;
   endgenerate
 
   generate
@@ -344,9 +358,9 @@ module ql
     if(spi_ram_wr == 1'b1)
     begin
       if(spi_ram_addr[31:24] == 8'hFF)
-	R_cpu_control <= spi_ram_do;
+        R_cpu_control <= spi_ram_do;
       else
-	R_spi_ram_byte[spi_ram_addr[0]] <= spi_ram_do;
+        R_spi_ram_byte[spi_ram_addr[0]] <= spi_ram_do;
       if(R_spi_ram_wr == 1'b0)
       begin
         if(spi_ram_addr[31:24] == 8'h00 && spi_ram_addr[0] == 1'b1)
