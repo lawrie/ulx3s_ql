@@ -66,10 +66,10 @@ module ql
   ecp5pll
   #(
       .in_hz( 25*1000000),
-    .out0_hz(125*1000000),
-    .out1_hz( 25*1000000),
-    .out2_hz(125*1000000),                // SDRAM core
-    .out3_hz(125*1000000), .out3_deg(180) // SDRAM chip 45-330:ok 0-30:not
+    .out0_hz(135*1000000),
+    .out1_hz( 27*1000000),
+    .out2_hz(135*1000000),                // SDRAM core
+    .out3_hz(135*1000000), .out3_deg(180) // SDRAM chip 45-330:ok 0-30:not
   )
   ecp5pll_inst
   (

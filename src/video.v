@@ -12,22 +12,23 @@ module video (
   output reg [14:1] vid_addr
 );
 
-  parameter HA = 640;
+  parameter HA = 720;
   parameter HS  = 96;
-  parameter HFP = 16;
-  parameter HBP = 48;
+  parameter HFP = 12;
+  parameter HBP = 36;
   parameter HT  = HA + HS + HFP + HBP;
 
-  parameter VA = 480;
-  parameter VS  = 2;
-  parameter VFP = 11;
-  parameter VBP = 31;
+  parameter VA = 576;
+  parameter VS  = 5;
+  parameter VFP = 5;
+  parameter VBP = 39;
   parameter VT  = VA + VS + VFP + VBP;
   parameter HBadj = 2;
 
-  reg [7:0]  vb  = 112;
-  reg [7:0]  hb  = 64;
+  reg [7:0]  vb  = 32;
+  reg [7:0]  hb  = 104;
   wire [7:0] hb2 = hb[6:1];
+  wire [7:0] vb2 = vb[6:1];
 
   // Default palette
   localparam transparent  = 24'h000000;
@@ -89,7 +90,7 @@ module video (
   assign vga_de = !(hc > HA || vc > VA);
 
   wire [7:0] x = hc[9:1] - hb2;
-  wire [7:0] y = vc - vb;
+  wire [7:0] y = vc[9:1] - vb2;
 
   wire [7:0] x2 = x + 2;
 
