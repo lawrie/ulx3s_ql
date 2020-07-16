@@ -7,8 +7,7 @@ start:
 	MOVE.L	#$10000,A0	; VRAM address
 	MOVE.W  #$3FFF,D0	; Full screen in words
 loop:
-	MOVE.W  #0, (A0)	; Write to VRAM
-	ADDQ.L	#2, A0		; Increment VRAM pointer
+	MOVE.W  #0, (A0)+	; Write to VRAM
 	DBRA    D0, loop	; Loop until done
 	STOP    #$2700
 

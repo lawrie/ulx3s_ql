@@ -24,7 +24,7 @@ module video (
   parameter VFP = 5;
   parameter VBP = 39;
   parameter VT  = VA + VS + VFP + VBP;
-  parameter HBadj = 2;
+  parameter HBadj = 0;
 
   reg [7:0]  vb  = 32;
   reg [7:0]  hb  = 104;

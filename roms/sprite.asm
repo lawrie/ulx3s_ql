@@ -10,14 +10,14 @@ START
 ; Clear the screen
 	LEA	$10000,A0	; VRAM address of top half
 	MOVE.W  #$1FFF,D0	; Clear too half of  screen to cyan
-CLEAR	MOVE.W  #$5555, (A0)+	; Write to VRAM
+CLEAR	MOVE.W  #$AA55, (A0)+	; Write to VRAM
         DBRA    D0, CLEAR	; Loop until done
-        LEA     $14000,A0       ; VRAM address of bottonm half
+        LEA     $14000,A0       ; VRAM address of bottom half
 	MOVE.W  #$1FFF,D0	; Clear bottom half of screen to yellow
-CLEAR1	MOVE.W  #$6666, (A0)+	; Write to VRAM
+CLEAR1	MOVE.W  #$AAAA, (A0)+	; Write to VRAM
         DBRA    D0, CLEAR1	; Loop until done
 ; Draw sprites
-	MOVE.W	#123, D3	; Draw it 124 times
+	MOVE.W	#61, D3		; Draw it 62 times
 DRAW
 	LEA	$13800,A0	; 16 pixels above bottom half
         MOVE.B  KEYROW1.L,D4    ; Get Keyrow 1
@@ -25,8 +25,9 @@ DRAW
 	BEQ.S	NOJMP
 	SUBA.L	#2048,A0
 NOJMP	
-	MOVE.W	#123,D4		; Get positive index 
-	SUB.W	D3,D4	
+	MOVE.W	#61,D4		; Get positive index 
+	SUB.W	D3,D4
+	LSL.W	#1,D4		; Double it
 	ADDA.W	D4,A0		; Add it to screen address
 	BSR	PLAY
 	MOVE.L	A0,-(SP)	; Save address
@@ -42,7 +43,7 @@ NOJMP
 	BSR	SPRITE16
 	DBRA	D3,DRAW		; Continue to next position
 	BSR	SOUNDOFF
-	MOVE.W	#123, D3	; Draw it 124 times
+	MOVE.W	#61, D3		; Draw it 62 times
 DRAWBACK
 	LEA	$1387C,A0	; 16 pixels above bottom half
         MOVE.B  KEYROW1.L,D4    ; Get Keyrow 1
@@ -50,8 +51,9 @@ DRAWBACK
 	BEQ.S	NOJMP1
 	SUBA.L	#2048,A0
 NOJMP1
-	MOVE.W	#123,D4		; Get positive index 
-	SUB.W	D3,D4		
+	MOVE.W	#61,D4		; Get positive index 
+	SUB.W	D3,D4
+	LSL.W	#1,D4		; Double it		
 	SUB.W	D4,A0		; Subtract it from screen address
 	BSR	PLAY
 	MOVE.L	A0,-(SP)	; Save address
@@ -95,21 +97,44 @@ PIX2A   MOVE.B  (A1)+,(A0)+	; For 8x16 sprite
 ; Byte-aligned only
 SPRFLIP
 	MOVE.W	#7,D0		; 8 rows in a sprite
-LINEF	MOVE.W	#3,D1		; 4 bytes, 8 pixels on a row
-	ADDA.L	#4,A0
-PIXELF	MOVE.B	(A1)+,D4	; Write 2 pixels to screen
-	ROL.B	#4,D4
-	MOVE.B	D4,-(A0)
-	DBRA	D1,PIXELF	; Loop until 8 pixels written
-	SUBQ.L	#4, A1		; Go back to start of sprite row
-	ADDA.L	#132,A0		; Move to next screen row
-        MOVE.W	#3,D1		; Write second copy of row
-PIXFA   MOVE.B  (A1)+,D4	; For 8x16 sprite
-	ROL.B	#4,D4
-	MOVE.B	D4,-(A0)
-	DBRA	D1,PIXFA
+LINEF	BSR.S	FLIPLINE
 	ADDA.L	#128,A0		; Move to next line
+	BSR.S	FLIPLINE
+	ADDA.L	#4,A1
+	ADDA.L	#128,A0
 	DBRA	D0,LINEF
+	RTS
+
+FLIPLINE
+	MOVE.B  2(A1),D4
+	BSR.S	FLIPPIX
+	MOVE.B	D4,(A0)
+	MOVE.B  3(A1), D4
+	BSR.S	FLIPPIX
+	MOVE.B  D4,1(A0)
+	MOVE.B  (A1),D4
+	BSR.S	FLIPPIX
+	MOVE.B	D4,2(A0)
+	MOVE.B  1(A1),D4
+	BSR.S	FLIPPIX
+	MOVE.B	D4,3(A0)
+	RTS
+
+FLIPPIX
+	MOVE.B	D4,D5           ; Duplicate it
+	MOVE.B  D4,D6
+        MOVE.B  D4,D7
+	AND.B   #$03,D4
+	AND.B	#$0C,D5
+	AND.B	#$30,D6
+	AND.B	#$C0,D7
+        LSL.B   #6,D4
+	LSL.B	#2,D5
+	LSR.B	#2,D6
+	LSR.B	#6,D7
+	OR.B	D5,D4
+	OR.B	D6,D4
+	OR.B	D7,D4
 	RTS
 
 ; A0 = screen address, A1 = sprite
@@ -203,24 +228,14 @@ TONE    BSR	SOUNDON
 	RTS
 
 SPRITE1	
-	DC.B	$50,$22,$22,$55
-	DC.B	$52,$22,$77,$22
-	DC.B	$00,$06,$06,$05
-	DC.B	$00,$06,$06,$05
-	DC.B	$06,$00,$66,$65
-	DC.B	$21,$12,$20,$06
-	DC.B	$61,$11,$15,$55
-	DC.B	$00,$55,$00,$55
-
-BLANK
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
-	DC.B	$55,$55,$55,$55
+	DC.L	$800A0A05
+	DC.L	$802AA0FA
+	DC.L	$02020221
+	DC.L	$02020221
+	DC.L	$2020AAA5
+	DC.L	$00960281
+	DC.L	$80552A55
+	DC.L	$0A050A05
 
 	ORG	$18000		; RAM
 
