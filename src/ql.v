@@ -82,10 +82,7 @@ module ql
   wire clk_hdmi  = clocks[0];
   wire clk_vga   = clocks[1];
   wire clk_cpu   = clocks[1];
-  //wire clk_sdram = clocks[0];
   wire clk_sdram = clocks[2];
-  //wire sdram_clk = clocks[3];
-  //assign sdram_cke = 1'b1;
 
   // ===============================================================
   // Reset generation
@@ -185,17 +182,25 @@ module ql
   wire audio_cs = !vma_n && cpu_a[3:1] == 2;
   wire keybd_cs = !vma_n && cpu_a[3:1] == 3;
   wire timer_cs = !vma_n && cpu_a[3:2] == 2;
+  wire display_cs = !vma_n && cpu_a[3:1] == 6;
   wire [7:0] acia_dout;
   wire [63:0] kbd_matrix;
   reg  [31:0] timer = 0;
   reg  [24:0] prescaler;
+  reg  mode = 1;
 
+  // Create a 1 second timer
   always @(posedge clk_cpu) begin
     prescaler <= prescaler + 1;
     if (prescaler == (c_mhz - 1)) begin
       prescaler <= 0;
       timer <= timer + 1;
     end
+  end
+
+  // Set the display mode 0 = 512x512, 1 = 256x256
+  always @(posedge clk_cpu) begin
+    if (display_cs && !cpu_rw) mode = cpu_dout[3];
   end
 
   // Address 0x600000 to 6fffff used for peripherals
@@ -228,7 +233,7 @@ module ql
         delay_cnt <= delay_cnt + 1;
       end
     end
-    else // c_slowdown == 0, Run 68k CPU at 12.5 MHz
+    else // c_slowdown == 0, Run 68k CPU at 13.5 MHz
       always @(posedge clk_cpu)
       begin
         fx68_phi1 <= ~fx68_phi1;
@@ -489,7 +494,8 @@ module ql
     .vga_hs(hSync),
     .vga_vs(vSync),
     .vid_addr(vid_addr),
-    .vid_dout(vid_dout)
+    .vid_dout(vid_dout),
+    .mode(mode)
   );
 
   // ===============================================================
