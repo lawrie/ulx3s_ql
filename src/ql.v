@@ -562,7 +562,7 @@ module ql
   // ===============================================================
   // Diagnostic leds
   // ===============================================================
-  assign leds = {cpu_fc2, cpu_fc1, cpu_fc0};
+  assign leds = {cpu_fc2, cpu_fc1, cpu_fc0, mode};
 
   generate
   if(c_lcd_hex)

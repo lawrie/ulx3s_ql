@@ -1,9 +1,11 @@
+DISPLAY EQU     $60000D
+	
 	ORG	$0000
 
 	DC.L	$20000		; Set stack to top of RAM
 	DC.L    start		; Set PC to start
 
-start:
+start:	MOVE.B	#$08,DISPLAY.L	; Set 256x256 mode
 	MOVE.L	#$10000,A0	; VRAM address
 	MOVE.W  #$3FFF,D0	; Full screen in words
 loop:

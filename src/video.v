@@ -62,8 +62,9 @@ module video (
 
   // Read 2 pixels at a time
   reg [7:0] pixels0, pixels1;
+  reg [15:0] pixels8;
   wire [3:0] pixel = mode == 1  ? {1'b0, pixels0[7], pixels1[7], pixels1[6]} 
-                                : {1'b0, pixels0[7], pixels1[7], 1'b0};
+                                : {1'b0, pixels8[14], pixels8[15], pixels8[15] & pixels8[14]};
 
   always @(posedge clk) begin
     if (mode == 1) begin
@@ -78,10 +79,9 @@ module video (
     end else begin
       if (hc < HA) begin
         if (x[2:0] == 6) vid_addr = {y, x2[7:3]};
-        if (x[2:0] == 7) {pixels0, pixels1} = vid_dout;
+        if (x[2:0] == 7) pixels8 = vid_dout;
 	else begin
-          pixels0 <= {pixels0[6:0],1'b0};
-          pixels1 <= {pixels1[6:0],1'b0};
+          pixels8 <= {pixels8[13:0],2'b0};
         end
       end
     end 
