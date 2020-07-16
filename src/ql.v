@@ -468,14 +468,12 @@ module ql
   wire [14:1] vid_addr; // Used by vdp
   wire [15:0]  vid_dout; // Used by vdp
   wire        vga_wr = !cpu_rw && cpu_a[17:15] == 2;
-  wire        vga_rd = cpu_rw && cpu_a[17:15] == 2;
   wire        vga_de;
 
   vram video_ram (
     .clk_a(clk_cpu),
     .addr_a(cpu_a[14:1]),
     .we_a(vga_wr),
-    .re_a(vga_rd),
     .din_a(cpu_dout),
     .ub_a(!cpu_uds_n),
     .lb_a(!cpu_lds_n),
