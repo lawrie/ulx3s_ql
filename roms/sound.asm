@@ -1,4 +1,4 @@
-SOUND    EQU $600005
+SOUND    EQU $18009
 
 RDRF    EQU 0
 TDRE    EQU 1
@@ -7,7 +7,7 @@ CR      EQU 13
 LF      EQU 10
 	ORG	$0000
 
-	DC.L	$20000		; Set stack to top of RAM
+	DC.L	$30000		; Set stack to top of RAM
 	DC.L    START		; Set PC to start
 
 START	

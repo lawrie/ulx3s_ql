@@ -4,7 +4,7 @@ void fill(void)
   unsigned short int buffer[N];
   for(unsigned short int i = 0; i < N; i++)
     buffer[i] = ~(i<<8) | (i&0xFF);
-  unsigned short int *v = (unsigned short int *) 0x10000; // video framebuffer
+  unsigned short int *v = (unsigned short int *) 0x20000; // video framebuffer
   for(unsigned short int i = 0; i < N; i++)
     v[i] = 0;
   loop:
@@ -16,7 +16,7 @@ void fill(void)
 
 void __attribute__((noreturn)) main(void)
 {
-  asm("dc.l 0x20000"); // Set stack to top of RAM
+  asm("dc.l 0x30000"); // Set stack to top of RAM
   asm("dc.l fill");    // Set PC to execute fill()
   __builtin_unreachable();
 }

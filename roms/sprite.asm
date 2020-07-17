@@ -1,25 +1,27 @@
-KEYROW1	EQU $600017
-SOUND	EQU $600005
+DISPLAY	EQU	$18063
+KEYROW1	EQU	$1808B
+SOUND	EQU	$18009
 
 	ORG	$0000
 
-	DC.L	$20000		; Set stack to top of RAM
+	DC.L	$30000		; Set stack to top of RAM
 	DC.L    START		; Set PC to start
 
 START
 ; Clear the screen
-	LEA	$10000,A0	; VRAM address of top half
+	MOVE.B	#$08,DISPLAY.L	; Set 8-color mode
+	LEA	$20000,A0	; VRAM address of top half
 	MOVE.W  #$1FFF,D0	; Clear too half of  screen to cyan
 CLEAR	MOVE.W  #$AA55, (A0)+	; Write to VRAM
         DBRA    D0, CLEAR	; Loop until done
-        LEA     $14000,A0       ; VRAM address of bottom half
+        LEA     $24000,A0       ; VRAM address of bottom half
 	MOVE.W  #$1FFF,D0	; Clear bottom half of screen to yellow
 CLEAR1	MOVE.W  #$AAAA, (A0)+	; Write to VRAM
         DBRA    D0, CLEAR1	; Loop until done
 ; Draw sprites
 	MOVE.W	#61, D3		; Draw it 62 times
 DRAW
-	LEA	$13800,A0	; 16 pixels above bottom half
+	LEA	$23800,A0	; 16 pixels above bottom half
         MOVE.B  KEYROW1.L,D4    ; Get Keyrow 1
         BTST.L  #2,D4
 	BEQ.S	NOJMP
@@ -45,7 +47,7 @@ NOJMP
 	BSR	SOUNDOFF
 	MOVE.W	#61, D3		; Draw it 62 times
 DRAWBACK
-	LEA	$1387C,A0	; 16 pixels above bottom half
+	LEA	$2387C,A0	; 16 pixels above bottom half
         MOVE.B  KEYROW1.L,D4    ; Get Keyrow 1
         BTST.L  #2,D4
 	BEQ.S	NOJMP1
@@ -68,7 +70,7 @@ NOJMP1
 	LEA	BACK,A1		; Restore background
 	BSR	SPRITE16
 	DBRA	D3,DRAWBACK	; Continue to next position
-	LEA	$13800,A0
+	LEA	$23800,A0
 	LEA	SPRITE1,A1
 	BSR.S	SPRITE
 	BSR	SOUNDOFF
@@ -164,7 +166,8 @@ RPIX2A	MOVE.B  (A0)+,(A1)+	; For 8x16 sprite
 	DBRA	D0,RLINE
 	RTS
 
-PLAY	AND.W	#$1F,D4
+PLAY	LSR	#1,D4
+	AND.W	#$1F,D4
 	CMP	#13,D4
 	BEQ.S	NOSOUND
 	CMP	#17,D4
@@ -237,7 +240,7 @@ SPRITE1
 	DC.L	$80552A55
 	DC.L	$0A050A05
 
-	ORG	$18000		; RAM
+	ORG	$28000		; RAM
 
 BACK	DS.L	64
 

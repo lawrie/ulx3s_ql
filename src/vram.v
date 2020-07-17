@@ -3,7 +3,7 @@ module vram (
   input            we_a,
   input [14:1]     addr_a,
   input [15:0]      din_a,
-  output reg [7:0] dout_a,
+  output reg [15:0] dout_a,
   input            ub_a,
   input            lb_a,
   input            clk_b,

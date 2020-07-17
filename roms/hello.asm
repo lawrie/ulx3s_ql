@@ -1,4 +1,4 @@
-ACIAC    EQU $600001
+ACIAC    EQU $18005
 ACIAD    EQU ACIAC+2
 
 RDRF    EQU 0
@@ -8,7 +8,7 @@ CR      EQU 13
 LF      EQU 10
 	ORG	$0000
 
-	DC.L	$20000		; Set stack to top of RAM
+	DC.L	$30000		; Set stack to top of RAM
 	DC.L    START		; Set PC to start
 
 START	BSR.S	INIT_ACIA

@@ -1,5 +1,5 @@
-volatile unsigned char *ACIAC = (unsigned char *) 0x600001;
-volatile unsigned char *ACIAD = (unsigned char *) 0x600003;
+volatile unsigned char *ACIAC = (unsigned char *) 0x18005;
+volatile unsigned char *ACIAD = (unsigned char *) 0x18007;
 #define RDRF 0
 #define TDRE 1
 
@@ -40,7 +40,7 @@ void hello(void)
 
 void __attribute__((noreturn)) main(void)
 {
-  asm("dc.l 0x20000"); // Set stack to top of RAM
+  asm("dc.l 0x30000"); // Set stack to top of RAM
   asm("dc.l hello");    // Set PC to execute fill()
   __builtin_unreachable();
 }

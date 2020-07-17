@@ -172,17 +172,19 @@ module ql
   reg  ipl2_n = 1'b1;
   wire [15:0] ram_dout;
   wire [15:0] rom_dout;
-  wire [7:0]  vga_dout;
+  wire [15:0] vga_dout;
   wire [15:0] cpu_din;           // Data to CPU
   wire [15:0] cpu_dout;          // Data from CPU
   wire [23:1] cpu_a;             // Address
   reg [7:0] R_cpu_control = 4;   // SPI loader, initially HALT to
   wire halt_n = ~R_cpu_control[2]; // prevent running SDRAM junk code
-  wire acia_cs  = !vma_n && cpu_a[3:2] == 0;
-  wire audio_cs = !vma_n && cpu_a[3:1] == 2;
-  wire keybd_cs = !vma_n && cpu_a[3:1] == 3;
-  wire timer_cs = !vma_n && cpu_a[3:2] == 2;
-  wire display_cs = !vma_n && cpu_a[3:1] == 6;
+  // QL-compatible ports
+  wire timer_cs = !vma_n && cpu_a[6:2] == 0;    // $18000 - $18003
+  wire display_cs = !vma_n && cpu_a[6:1] == 49; // $18063
+  // Non_QL ports
+  wire acia_cs  = !vma_n && cpu_a[6:2] == 1;    // $18005 and $18007
+  wire audio_cs = !vma_n && cpu_a[6:1] == 4;    // $18009
+  wire keybd_cs = !vma_n && cpu_a[6:1] == 5;    // $1800B
   wire [7:0] acia_dout;
   wire [63:0] kbd_matrix;
   reg  [31:0] timer = 0;
@@ -203,22 +205,23 @@ module ql
     if (display_cs && !cpu_rw) mode = cpu_dout[3];
   end
 
-  // Address 0x600000 to 6fffff used for peripherals
-  assign vpa_n = !(cpu_a[23:18]==6'b011000) | cpu_as_n;
+  // Address 0x18000 to 0x1FFFF used for peripherals
+  assign vpa_n = !(cpu_a[17:15] == 3) | cpu_as_n;
 
   generate
   if(c_sdram) // SDRAM as ROM and RAM, BRAM as video
   assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
-                   keybd_cs          ? kbd_matrix[{cpu_a[6:4], 3'b0} + 7 -: 8] :
+                   keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
                                        ram_dout;
   else // BRAM all
-  assign cpu_din = cpu_a[17:15] < 2  ? rom_dout :
-                   cpu_a[17:15] == 2 ? vga_dout :
+  assign cpu_din = cpu_a[17:15] == 0 ? rom_dout :
+                   cpu_a[17:15] == 4 ? vga_dout :
                    acia_cs           ? {8'd0, acia_dout} :
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
-                   keybd_cs          ? kbd_matrix[{cpu_a[6:4], 3'b0} + 7 -: 8] :
-                                       ram_dout;
+                   keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
+                   cpu_a[17:15] == 5 ? ram_dout :
+		                       0;
   endgenerate
 
   generate
@@ -283,12 +286,12 @@ module ql
   // ===============================================================
   // 6850 ACIA (uart)
   // ===============================================================
-  reg baudclk; // 16 * 9600 = 153600 = 25Mhz/163
+  reg baudclk; // 16 * 9600 = 153600 = 27Mhz/176
   reg [7:0] baudctr = 0;
   always @(posedge clk_cpu) begin
     baudctr <= baudctr + 1;
-    baudclk <= (baudctr > 81);
-    if(baudctr > 162) baudctr <= 0;
+    baudclk <= (baudctr > 87);
+    if(baudctr > 175) baudctr <= 0;
   end
 
   // 9600 8N1
@@ -415,12 +418,12 @@ module ql
   else
   begin
   gamerom #(.MEM_INIT_FILE("../roms/test.mem")) 
-  rom16 (
+  rom32 (
     .clk(clk_cpu),
     .we_b(spi_ram_word_wr), // used by OSD
-    .addr_b(spi_ram_addr[15:1]),
+    .addr_b(spi_ram_addr[14:1]),
     .din_b(ram_di),
-    .addr(R_cpu_control[1] ? spi_ram_addr[15:1] : cpu_a[15:1]),
+    .addr(R_cpu_control[1] ? spi_ram_addr[14:1] : cpu_a[14:1]),
     .dout(rom_dout)
   );
   assign ram_do = rom_dout; // for SPI to read back what is written
@@ -431,7 +434,7 @@ module ql
     .clk(clk_cpu),
     .addr(cpu_a[14:1]),
     .din(cpu_dout),
-    .we(!cpu_rw && cpu_a[17:15] > 2),
+    .we(!cpu_rw && cpu_a[17:15] == 5),
     .dout(ram_dout),
     .ub(!cpu_uds_n),
     .lb(!cpu_lds_n)
@@ -466,8 +469,8 @@ module ql
   // Video
   // ===============================================================
   wire [14:1] vid_addr; // Used by vdp
-  wire [15:0]  vid_dout; // Used by vdp
-  wire        vga_wr = !cpu_rw && cpu_a[17:15] == 2;
+  wire [15:0] vid_dout; // Used by vdp
+  wire        vga_wr = !cpu_rw && cpu_a[17:15] == 4;
   wire        vga_de;
 
   vram video_ram (
