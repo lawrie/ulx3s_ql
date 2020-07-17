@@ -213,7 +213,8 @@ module ql
   assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
-                                       ram_dout;
+		   cpu_a[19:18] == 0 ? ram_dout :
+                                       0;	
   else // BRAM all
   assign cpu_din = cpu_a[17:15] == 0 ? rom_dout :
                    cpu_a[17:15] == 4 ? vga_dout :
