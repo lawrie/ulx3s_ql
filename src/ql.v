@@ -5,7 +5,7 @@ module ql
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
-  parameter c_diag        = 0, // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_diag        = 1, // 0: No LED diagnostcs, 1: LED diagnostics
   parameter c_mhz         = 27000000 // Clock speed of CPU clock
 )
 (
@@ -89,11 +89,14 @@ module ql
   // ===============================================================
   reg [15:0] pwr_up_reset_counter = 0;
   wire       pwr_up_reset_n = &pwr_up_reset_counter;
+  reg [7:0]  R_cpu_control = 4;   // SPI loader, initially HALT to
 
   always @(posedge clk_cpu) begin
      if (clk_sdram_locked && !pwr_up_reset_n)
        pwr_up_reset_counter <= pwr_up_reset_counter + 1;
   end
+
+  wire reset = !pwr_up_reset_n || !btn[0] || R_cpu_control[0];
 
   // ===============================================================
   // Ulx3s-specific pin assignments
@@ -167,8 +170,9 @@ module ql
   reg  dtack_n = !vpa_n;         // Data transfer ack (always ready)
   wire bg_n;                     // Bus grant
   reg  bgack_n = 1'b1;           // Bus grant ack
+  reg  vsync_irq;
   reg  ipl0_n = 1'b1;            // Interrupt request signals
-  reg  ipl1_n = 1'b1;
+  reg  ipl1_n = !vsync_irq;
   reg  ipl2_n = 1'b1;
   wire [15:0] ram_dout;
   wire [15:0] rom_dout;
@@ -176,20 +180,47 @@ module ql
   wire [15:0] cpu_din;           // Data to CPU
   wire [15:0] cpu_dout;          // Data from CPU
   wire [23:1] cpu_a;             // Address
-  reg [7:0] R_cpu_control = 4;   // SPI loader, initially HALT to
   wire halt_n = ~R_cpu_control[2]; // prevent running SDRAM junk code
+
   // QL-compatible ports
-  wire timer_cs = !vma_n && cpu_a[6:2] == 0;    // $18000 - $18003
-  wire display_cs = !vma_n && cpu_a[6:1] == 49; // $18063
+  wire timer_cs = !vma_n && cpu_a[6:2] == 0;                   // $18000 - $18003
+  wire timer_rst_cs = !vma_n && cpu_a[6:1] == 0 && !cpu_uds_n; // $18000
+  wire timer_adj_cs = !vma_n && cpu_a[6:1] == 0 && !cpu_lds_n; // $18001
+  wire ipcwr_cs = !vma_n && cpu_a[6:1] == 1 && !cpu_lds_n;     // $18003
+  wire ipcirq_cs = !vma_n && cpu_a[6:1] == 16;                 // $18020/21
+  wire mdv_cs = !vma_n && cpu_a[6:1] == 17;                    // $18022/23
+  wire display_cs = !vma_n && cpu_a[6:1] == 49;                // $18063
   // Non_QL ports
-  wire acia_cs  = !vma_n && cpu_a[6:2] == 1;    // $18005 and $18007
-  wire audio_cs = !vma_n && cpu_a[6:1] == 4;    // $18009
-  wire keybd_cs = !vma_n && cpu_a[6:1] == 5;    // $1800B
-  wire [7:0] acia_dout;
+  wire acia_cs  = !vma_n && cpu_a[6:2] == 1;                   // $18005 and $18007
+  wire audio_cs = !vma_n && cpu_a[6:1] == 4;                   // $18009
+  wire keybd_cs = !vma_n && cpu_a[6:1] == 5;                   // $1800B
+
+  wire [7:0]  acia_dout;
   wire [63:0] kbd_matrix;
   reg  [31:0] timer = 0;
   reg  [24:0] prescaler;
-  reg  mode = 1;
+  reg         mode = 1;
+  reg [15:0]  ipc_ret;
+  wire [7:0]  ipc_status = {ipc_ret[15], 7'b0}; // ipc busy always false
+  reg         ipc_irq = 1;
+  //wire [7:0]  irq_pending = {2'b0, timer[0], 1'b0, vsync_irq, 1'b0, ipc_irq, 1'b0};
+  wire [7:0]  irq_pending = {2'b0, timer[0], 1'b0, vsync_irq, 1'b0, 1'b0, 1'b0};
+  reg [2:0]   irq_mask;
+  reg [4:0]   irq_ack;
+  reg [7:0]   mdv_byte;
+  reg [3:0]   ipc_data;
+  reg [7:0]   mctrl;
+  reg [1:0]   timer_byte;
+  reg         r_vSync;
+  reg [3:0]   bit_counter;
+  reg [3:0]   ipc_cmd;
+  reg [3:0]   ipc_state;
+  reg [2:0]   key_row;
+  reg [2:0]   key_col;
+  reg         key_shift;
+  reg         key_ctrl;
+  reg         key_alt;
+  reg [3:0]   ipc_bits;
 
   // Create a 1 second timer
   always @(posedge clk_cpu) begin
@@ -198,23 +229,124 @@ module ql
       prescaler <= 0;
       timer <= timer + 1;
     end
+    if (timer_rst_cs && !cpu_rw) begin
+      timer <= 0;
+      timer_byte <= 0;
+    end
+    if (timer_adj_cs && !cpu_rw) begin
+      timer[{timer_byte,3'b0} + 7 -: 8] <= cpu_dout[7:0];
+      timer_byte <= timer_byte + 1;
+    end
   end
 
-  // Set the display mode 0 = 512x512, 1 = 256x256
+  // Set the vsync interrupt
   always @(posedge clk_cpu) begin
-    if (display_cs && !cpu_rw) mode = cpu_dout[3];
+    r_vSync <= vSync;
+    if (reset || irq_ack[3]) vsync_irq <= 0;
+    else if (!vSync && r_vSync) vsync_irq <= 1;
+  end
+
+  // Set the ipc interrupt
+  always @(posedge clk_cpu) begin
+    if (reset || irq_ack[1]) ipc_irq <= 0;
+    else if (ps2_key[10]) ipc_irq <= 1;
+  end
+
+  // I/O area writes
+  reg r_ipcwr_cs;
+  wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
+  always @(posedge clk_cpu) begin
+    if (reset) begin
+      bit_counter <= 0;
+      ipc_data <= 0;
+      diag16 <= 0;
+      ipc_cmd <= 0;
+      mode <= 1;
+      irq_mask <= 0;
+      ipc_state <= 0;
+    end else begin
+      irq_ack <= 5'b0;
+      r_ipcwr_cs <= ipcwr_cs;
+      if (!cpu_rw) begin
+        // Set the display mode 0 = 512x512, 1 = 256x256 -  $18063
+        if (display_cs) mode = cpu_dout[3];
+        // Set the irq data - $18021
+        if (ipcirq_cs && !cpu_lds_n) {irq_mask, irq_ack} <= cpu_dout[7:0];
+        // Set the ipc data  - $18003
+        if (ipcwr_cs && !r_ipcwr_cs) begin
+          ipc_data <= ipc_shift;
+          bit_counter <= bit_counter + 1;
+          if (ipc_state == 0 && bit_counter[1:0] == 3) begin
+            ipc_cmd <= ipc_shift;
+	    if (diag16 == 0 && ipc_shift != 8) diag16 <= ipc_shift;
+            case (ipc_shift)
+              0:  begin end // init
+              1:  begin     // get status
+                    ipc_state <= 1;
+                    ipc_bits <= 8;
+                    bit_counter <= 0;
+                    ipc_ret <= {ps2_key[10], 15'b0};    
+                  end
+              2:  begin end // open ser1
+              3:  begin end // open ser2
+              4:  begin end // close ser1
+              5:  begin end // close ser2
+              6:  begin end // read ser1
+              7:  begin end // read ser2
+              8:  begin     // read key
+                    ipc_state <= 1; 
+                    ipc_bits <= 12;    
+                    ipc_ret <= {4'b0, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
+                    //diag16 <= {1'b0, key_shift, key_ctrl, key_alt, key_row, key_col};
+                    bit_counter <= 0;
+                  end
+              9:  begin     // read key row
+                    ipc_state <= 2; // Get the keyrow
+                    ipc_bits <= 4;
+                    bit_counter <= 0;
+                  end
+              10: begin end // set sound
+              11: begin end // kill sound
+              12: begin end // set ipl1
+              13: begin end // set baud rate
+              14: begin end // read random
+              15: begin end // test - not used
+            endcase
+          end else if (ipc_state == 1) begin // Send return data to QDOS
+            ipc_ret <= {ipc_ret[14:0], 1'b0};
+            if (bit_counter == (ipc_bits - 1)) begin
+              ipc_state <= 0;
+              bit_counter <= 0;
+            end
+          end else if (ipc_state == 2) begin // Get parameters
+            ipc_data <= ipc_shift;
+            if (bit_counter == (ipc_bits - 1)) begin
+              ipc_state <= 1;
+              bit_counter <= 0;
+              if (ipc_cmd == 9) begin
+                ipc_ret <= {kbd_matrix[{ipc_data, 3'b111} -: 8], 8'b0};
+                ipc_bits <= 8;
+              end
+            end
+          end
+        end
+      end
+    end
   end
 
   // Address 0x18000 to 0x1FFFF used for peripherals
-  assign vpa_n = !(cpu_a[17:15] == 3) | cpu_as_n;
+  // Also set autovector for interrupts
+  assign vpa_n = (!(cpu_a[17:15] == 3) | cpu_as_n) & !(cpu_fc0 & cpu_fc1 & cpu_fc2);
 
   generate
   if(c_sdram) // SDRAM as ROM and RAM, BRAM as video
   assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
-                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
+                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
-		   cpu_a[19:18] == 0 ? ram_dout :
-                                       0;	
+                   ipcirq_cs         ? {ipc_status, irq_pending} : // $18020/18021
+                   //mdv_cs            ? {mdv_byte, mdv_byte} :
+                   cpu_a[19:18] == 0 ? ram_dout :
+                                       0;
   else // BRAM all
   assign cpu_din = cpu_a[17:15] == 0 ? rom_dout :
                    cpu_a[17:15] == 4 ? vga_dout :
@@ -222,9 +354,10 @@ module ql
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
                    cpu_a[17:15] == 5 ? ram_dout :
-		                       0;
+                                       0;
   endgenerate
 
+  // Generate phi1 and phi2 clock enables for the CPU
   generate
     if(c_slowdown)
     begin
@@ -249,7 +382,7 @@ module ql
     // input
     .clk( clk_cpu),
     .HALTn(halt_n),
-    .extReset(!btn[0] || !pwr_up_reset_n || R_cpu_control[0]),
+    .extReset(reset),
     .pwrUp(!pwr_up_reset_n),
     .enPhi1(fx68_phi1),
     .enPhi2(fx68_phi2),
@@ -276,7 +409,7 @@ module ql
     .BGACKn(1'b1),
     .IPL0n(ipl0_n),
     .IPL1n(ipl1_n),
-    .IPL2n(ipl2_n),
+    .IPL2n(ipl0_n), // ipl 0 and 2 tied together on the 68008
 
     // busses
     .iEdb(cpu_din),
@@ -466,6 +599,29 @@ module ql
     .matrix(kbd_matrix)
   );
 
+  assign key_row = kbd_matrix[7:0]   ? 0 :
+                   kbd_matrix[15:8]  ? 1 :
+                   kbd_matrix[23:16] ? 2 :
+                   kbd_matrix[31:24] ? 3 :
+                   kbd_matrix[39:32] ? 4 :
+                   kbd_matrix[47:40] ? 5 :
+                   kbd_matrix[55:48] ? 6 : 7;
+
+  wire [7:0]  col = kbd_matrix[{key_row, 3'b111} -: 8];
+
+  assign key_col = col[0] ? 0 :
+                   col[1] ? 1 :
+                   col[2] ? 2 :
+                   col[3] ? 3 :
+                   col[4] ? 4 :
+                   col[5] ? 5 :
+                   col[6] ? 1 : 7;
+
+
+  assign key_shift = kbd_matrix[56];
+  assign key_ctrl  = kbd_matrix[57];
+  assign key_alt   = kbd_matrix[58];
+
   // ===============================================================
   // Video
   // ===============================================================
@@ -564,7 +720,7 @@ module ql
   // ===============================================================
   // Diagnostic leds
   // ===============================================================
-  assign leds = {cpu_fc2, cpu_fc1, cpu_fc0, mode};
+  assign leds = {ipc_cmd, ipl1_n, ipl0_n, vsync_irq, mode};
 
   generate
   if(c_lcd_hex)
