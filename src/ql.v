@@ -295,7 +295,7 @@ module ql
               7:  begin end // read ser2
               8:  begin     // read key
                     ipc_state <= 1; 
-                    ipc_bits <= 12;    
+                    ipc_bits <= 16;    
                     ipc_ret <= {4'b0, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     //diag16 <= {1'b0, key_shift, key_ctrl, key_alt, key_row, key_col};
                     bit_counter <= 0;
