@@ -267,7 +267,7 @@ module ql
       ipc_state <= 0;
       key_pressed <= 0;
     end else begin
-      if (ps2_key[10]) key_pressed <= 1;
+      if (ps2_key[10] & ps2_key[9]) key_pressed <= 1;
       irq_ack <= 5'b0;
       r_ipcwr_cs <= ipcwr_cs;
       if (!cpu_rw) begin
@@ -278,10 +278,10 @@ module ql
         // Set the ipc data  - $18003
         if (ipcwr_cs && !r_ipcwr_cs) begin
           ipc_data <= ipc_shift;
-          bit_counter <= bit_counter + 1;
+          if (!cpu_dout[0]) bit_counter <= bit_counter + 1; // Ignore initial write of 1
           if (ipc_state == 0 && bit_counter[1:0] == 3) begin
             ipc_cmd <= ipc_shift;
-            if (diag16 == 0 && ipc_shift != 8) diag16 <= ipc_shift;
+            //if (diag16 == 0 && ipc_shift != 1) diag16 <= ipc_shift;
             case (ipc_shift)
               0:  begin end // init
               1:  begin     // get status
@@ -289,6 +289,7 @@ module ql
                     ipc_bits <= 8;
                     bit_counter <= 0;
                     ipc_ret <= {7'b0, key_pressed, 8'b0};
+                    diag16 <= {7'b0, key_pressed, 8'b0};
                     key_pressed <= 0;
                   end
               2:  begin end // open ser1
@@ -301,7 +302,6 @@ module ql
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
                     ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
-                    //diag16 <= {1'b0, key_shift, key_ctrl, key_alt, key_row, key_col};
                     bit_counter <= 0;
                   end
               9:  begin     // read key row
@@ -317,7 +317,7 @@ module ql
               15: begin end // test - not used
             endcase
           end else if (ipc_state == 1) begin // Send return data to QDOS
-            ipc_ret <= {ipc_ret[14:0], 1'b0};
+            if (bit_counter != 0) ipc_ret <= {ipc_ret[14:0], 1'b0};
             if (bit_counter == (ipc_bits - 1)) begin
               ipc_state <= 0;
               bit_counter <= 0;
