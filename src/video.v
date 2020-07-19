@@ -64,7 +64,7 @@ module video (
   reg [7:0] pixels0, pixels1;
   reg [15:0] pixels8;
   wire [3:0] pixel = mode == 1  ? {1'b0, pixels0[7], pixels1[7], pixels1[6]} 
-                                : {1'b0, pixels8[15], pixels8[7], pixels8[15] & pixels8[7]};;
+                                : {1'b0, pixels8[15], pixels8[7], pixels8[15] & pixels8[7]};
 
   always @(posedge clk) begin
     if (mode == 1) begin
