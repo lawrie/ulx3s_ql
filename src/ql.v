@@ -221,7 +221,7 @@ module ql
   reg         key_ctrl;
   reg         key_alt;
   reg         key_pressed;
-  reg [3:0]   ipc_bits;
+  reg [4:0]   ipc_bits;
 
   // Create a 1 second timer
   always @(posedge clk_cpu) begin
@@ -289,7 +289,7 @@ module ql
                     ipc_bits <= 8;
                     bit_counter <= 0;
                     ipc_ret <= {7'b0, key_pressed, 8'b0};
-                    diag16 <= {7'b0, key_pressed, 8'b0};
+                    //diag16 <= {7'b0, key_pressed, 8'b0};
                     key_pressed <= 0;
                   end
               2:  begin end // open ser1
@@ -302,6 +302,7 @@ module ql
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
                     ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
+                    diag16 <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     bit_counter <= 0;
                   end
               9:  begin     // read key row
