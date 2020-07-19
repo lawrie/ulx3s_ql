@@ -220,6 +220,7 @@ module ql
   reg         key_shift;
   reg         key_ctrl;
   reg         key_alt;
+  reg         key_pressed;
   reg [3:0]   ipc_bits;
 
   // Create a 1 second timer
@@ -264,7 +265,9 @@ module ql
       mode <= 1;
       irq_mask <= 0;
       ipc_state <= 0;
+      key_pressed <= 0;
     end else begin
+      if (ps2_key[10]) key_pressed <= 1;
       irq_ack <= 5'b0;
       r_ipcwr_cs <= ipcwr_cs;
       if (!cpu_rw) begin
@@ -278,14 +281,15 @@ module ql
           bit_counter <= bit_counter + 1;
           if (ipc_state == 0 && bit_counter[1:0] == 3) begin
             ipc_cmd <= ipc_shift;
-	    if (diag16 == 0 && ipc_shift != 8) diag16 <= ipc_shift;
+            if (diag16 == 0 && ipc_shift != 8) diag16 <= ipc_shift;
             case (ipc_shift)
               0:  begin end // init
               1:  begin     // get status
                     ipc_state <= 1;
                     ipc_bits <= 8;
                     bit_counter <= 0;
-                    ipc_ret <= {ps2_key[10], 15'b0};    
+                    ipc_ret <= {7'b0, key_pressed, 8'b0};
+                    key_pressed <= 0;
                   end
               2:  begin end // open ser1
               3:  begin end // open ser2
@@ -296,7 +300,7 @@ module ql
               8:  begin     // read key
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
-                    ipc_ret <= {4'b0, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
+                    ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     //diag16 <= {1'b0, key_shift, key_ctrl, key_alt, key_row, key_col};
                     bit_counter <= 0;
                   end
@@ -319,7 +323,6 @@ module ql
               bit_counter <= 0;
             end
           end else if (ipc_state == 2) begin // Get parameters
-            ipc_data <= ipc_shift;
             if (bit_counter == (ipc_bits - 1)) begin
               ipc_state <= 1;
               bit_counter <= 0;
