@@ -301,7 +301,7 @@ module ql
               8:  begin     // read key
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
-                    ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
+                    ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, ~key_row, key_col};
                     diag16 <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     bit_counter <= 0;
                   end
@@ -328,7 +328,7 @@ module ql
               ipc_state <= 1;
               bit_counter <= 0;
               if (ipc_cmd == 9) begin
-                ipc_ret <= {kbd_matrix[{ipc_data, 3'b111} -: 8], 8'b0};
+                ipc_ret <= {kbd_matrix[{ipc_shift, 3'b111} -: 8], 8'b0};
                 ipc_bits <= 8;
               end
             end
@@ -619,7 +619,7 @@ module ql
                    col[3] ? 3 :
                    col[4] ? 4 :
                    col[5] ? 5 :
-                   col[6] ? 1 : 7;
+                   col[6] ? 6 : 7;
 
 
   assign key_shift = kbd_matrix[56];
