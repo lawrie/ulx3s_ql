@@ -212,7 +212,7 @@ module ql
   reg [7:0]   mctrl;
   reg [1:0]   timer_byte;
   reg         r_vSync;
-  reg [3:0]   bit_counter;
+  reg [5:0]   bit_counter;
   reg [3:0]   ipc_cmd;
   reg [3:0]   ipc_state;
   reg [2:0]   key_row;
@@ -221,7 +221,8 @@ module ql
   reg         key_ctrl;
   reg         key_alt;
   reg         key_pressed;
-  reg [4:0]   ipc_bits;
+  reg [6:0]   ipc_bits;
+  reg [63:0]  ipc_sound;
 
   // Create a 1 second timer
   always @(posedge clk_cpu) begin
@@ -256,6 +257,7 @@ module ql
   // I/O area writes
   reg r_ipcwr_cs;
   wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
+  wire [63:0] sound_shift = {ipc_sound[62:0], cpu_dout[1]};
   always @(posedge clk_cpu) begin
     if (reset) begin
       bit_counter <= 0;
@@ -310,7 +312,11 @@ module ql
                     ipc_bits <= 4;
                     bit_counter <= 0;
                   end
-              10: begin end // set sound
+              10: begin // set sound
+                    ipc_state <= 3;
+                    ipc_bits <= 64;
+                    bit_counter <= 0;
+                  end 
               11: begin end // kill sound
               12: begin end // set ipl1
               13: begin end // set baud rate
@@ -331,6 +337,12 @@ module ql
                 ipc_ret <= {kbd_matrix[{ipc_shift, 3'b111} -: 8], 8'b0};
                 ipc_bits <= 8;
               end
+            end
+          end else if (ipc_state == 3) begin // Get sound parameters
+            ipc_sound <= sound_shift;
+            if (bit_counter == (ipc_bits - 1)) begin
+              ipc_state <= 0;
+              bit_counter <= 0;
             end
           end
         end
