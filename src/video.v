@@ -51,10 +51,10 @@ module video (
   assign vga_vs = !(vc >= VA + VFP && vc < VA + VFP + VS);
   assign vga_de = !(hc >= HA || vc >= VA);
 
-  wire [7:0] x = (mode == 1 ? hc[9:1] - hb2 : hc - hb);
-  wire [7:0] y = (mode == 1 ? vc[9:1] - vb2 : vc - vb);
+  wire [8:0] x = (mode == 1 ? hc[9:1] - hb2 : hc - hb);
+  wire [7:0] y = vc[9:1] - vb2;
 
-  wire [7:0] x2 = x + 2;
+  wire [8:0] x2 = x + 2;
 
   wire hBorder = (hc < (hb + HBadj) || hc >= HA - (hb + HBadj));
   wire vBorder = (vc < vb || vc >= VA - vb);
@@ -78,7 +78,7 @@ module video (
       end
     end else begin
       if (hc < HA) begin
-        if (x[2:0] == 6) vid_addr = {y, x2[7:3]};
+        if (x[2:0] == 6) vid_addr = {y, x2[8:3]};
         if (x[2:0] == 7) pixels8 = vid_dout;
 	else begin
           pixels8 <= {pixels8[13:0],2'b0};
