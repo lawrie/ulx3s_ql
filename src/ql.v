@@ -623,7 +623,9 @@ module ql
                    kbd_matrix[47:40] ? 5 :
                    kbd_matrix[55:48] ? 6 : 7;
 
-  wire [7:0]  col = kbd_matrix[{key_row, 3'b111} -: 8];
+  wire [7:0]  col = kbd_matrix[{key_row, 3'b111} -: 8] & 
+	            (key_row == 7 && kbd_matrix[58:56] != 0 && 
+		     kbd_matrix[63:59] != 0 ? 8'hf8 : 8'hff);
 
   assign key_col = col[0] ? 0 :
                    col[1] ? 1 :
