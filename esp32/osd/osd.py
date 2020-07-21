@@ -398,7 +398,7 @@ def peek(addr,length=1):
 def poke(addr,data):
   run.poke(addr,data)
 
-bitstream="/sd/m68k/bitstreams/ulx3s_85f_m68k_sdram.bit"
+bitstream="/sd/ql/bitstreams/ulx3s_12f_ql.bit"
 try:
   os.mount(SDCard(slot=3),"/sd")
   ecp5.prog(bitstream)
