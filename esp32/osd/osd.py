@@ -27,12 +27,18 @@ class osd:
     self.init_fb()
     self.exp_names = " KMGTE"
     self.mark = bytearray([32,16,42]) # space, right triangle, asterisk
+    self.diskfile=False
+    self.header_buf=bytearray(16)
+    self.data_buf=bytearray(518)
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
     self.spi_read_btn = bytearray([1,0xFB,0,0,0,0,0])
+    self.spi_read_blktyp = bytearray([1,2,0,0,0,0,0])
     self.spi_result = bytearray(7)
     self.spi_enable_osd = bytearray([0,0xFE,0,0,0,1])
     self.spi_write_osd = bytearray([0,0xFD,0,0,0])
+    self.spi_send_header = bytearray([0,1,0,0,0])
+    self.spi_send_data = bytearray([0,1,0,0,0])
     self.spi_channel = const(2)
     self.spi_freq = const(3000000)
     self.init_pinout_sd()
@@ -71,6 +77,26 @@ class osd:
     self.spi.write_readinto(self.spi_read_irq, self.spi_result)
     self.cs.off()
     btn_irq = p8result[6]
+    if btn_irq&1: # microdrive 1 request
+      self.cs.on()
+      self.spi.write_readinto(self.spi_read_blktyp,self.spi_result)
+      self.cs.off()
+      blktyp=p8result[6]
+      if self.diskfile:
+        if blktyp==0:
+          self.diskfile.seek(0)
+          self.diskfile.readinto(self.header_buf)
+          self.cs.on()
+          self.spi.write(self.spi_send_header)
+          self.spi.write(self.header_buf)
+          self.cs.off()
+        if blktyp==1:
+          self.diskfile.seek(16)
+          self.diskfile.readinto(self.data_buf)
+          self.cs.on()
+          self.spi.write(self.spi_send_data)
+          self.spi.write(self.data_buf)
+          self.cs.off()
     if btn_irq&0x80: # btn event IRQ flag
       self.cs.on()
       self.spi.write_readinto(self.spi_read_btn, self.spi_result)
@@ -156,6 +182,10 @@ class osd:
     self.show_dir_line(oldselected)
     self.show_dir_line(self.fb_cursor - self.fb_topitem)
     if filename:
+      if filename.endswith(".mdv"):
+        self.diskfile = open(filename,"rb")
+        self.enable[0]=0
+        self.osd_enable(0)
       if filename.endswith(".bit"):
         self.spi_request.irq(handler=None)
         self.timer.deinit()
