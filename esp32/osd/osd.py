@@ -92,7 +92,7 @@ class osd:
             self.start_autorepeat(1)
           if btn==1:
             self.timer.deinit() # stop autorepeat
-          if btn==33: # btn6 cursor left
+          if btn==33: # btn5 cursor left
             self.updir()
           if btn==65: # btn6 cursor right
             self.select_entry()
