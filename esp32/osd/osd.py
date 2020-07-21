@@ -347,9 +347,12 @@ class osd:
       stat = os.stat(self.fullpath(fname))
       if stat[0] & 0o170000 == 0o040000:
         self.direntries.append([fname,1,0]) # directory
-      else:
+    for fname in ls:
+      stat = os.stat(self.fullpath(fname))
+      if stat[0] & 0o170000 != 0o040000:
         self.direntries.append([fname,0,stat[6]]) # file
-      gc.collect()
+
+
 
   # NOTE: this can be used for debugging
   #def osd(self, a):
