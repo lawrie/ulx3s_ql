@@ -2,10 +2,12 @@
 module ql
 #(
   parameter c_slowdown    = 0, // CPU clock slowdown 2^n times (try 20-22)
-  parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
+  parameter c_lcd_hex     = 0, // SPI LCD HEX decoder
   parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
-  parameter c_diag        = 1, // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_diag        = 0, // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_acia_serial = 0, // 0: disabled, 1: ACIA serial
+  parameter c_esp32_serial= 1, // 0: disabled, 1: ESP32 serial (micropython console)
   parameter c_mhz         = 27000000 // Clock speed of CPU clock
 )
 (
@@ -106,9 +108,19 @@ module ql
   assign usb_fpga_pu_dp = 1;
   assign usb_fpga_pu_dn = 1;
 
-  // Passthru to ESP32 micropython serial console
-  //assign wifi_rxd = ftdi_txd;
-  //assign ftdi_rxd = wifi_txd;
+  wire acia_txd, acia_rxd;
+  generate
+    if(c_acia_serial)
+    begin
+      assign acia_rxd = ftdi_txd;
+      assign ftdi_rxd = acia_txd;
+    end
+    if(c_esp32_serial)
+    begin
+      assign wifi_rxd = ftdi_txd;
+      assign ftdi_rxd = wifi_txd;
+    end
+  endgenerate
 
   // ===============================================================
   // Optional VGA output
@@ -475,8 +487,8 @@ module ql
     .data_out(acia_dout),
     .txclk(baudclk),
     .rxclk(baudclk),
-    .txdata(ftdi_rxd),
-    .rxdata(ftdi_txd),
+    .txdata(acia_txd),
+    .rxdata(acia_rxd),
     .cts_n(1'b0),
     .dcd_n(1'b0)
   );
