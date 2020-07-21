@@ -223,6 +223,10 @@ module ql
   reg         key_pressed;
   reg [6:0]   ipc_bits;
   reg [63:0]  ipc_sound;
+  reg [9:0]   pitch;
+  reg [14:0]  duration;
+  reg [1:0]   audio_state;
+  reg [10:0]  audio_scale;
 
   // Create a 1 second timer
   always @(posedge clk_cpu) begin
@@ -258,6 +262,7 @@ module ql
   reg r_ipcwr_cs;
   wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
   wire [63:0] sound_shift = {ipc_sound[62:0], cpu_dout[1]};
+  wire [14:0] beep_length ={sound_shift[22:16], sound_shift[31:24]}; 
   always @(posedge clk_cpu) begin
     if (reset) begin
       bit_counter <= 0;
@@ -268,6 +273,7 @@ module ql
       irq_mask <= 0;
       ipc_state <= 0;
       key_pressed <= 0;
+      audio_state <= 0;
     end else begin
       if (ps2_key[10] & ps2_key[9]) key_pressed <= 1;
       irq_ack <= 5'b0;
@@ -304,7 +310,7 @@ module ql
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
                     ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, ~key_row, key_col};
-                    diag16 <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
+                    //diag16 <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     bit_counter <= 0;
                   end
               9:  begin     // read key row
@@ -317,7 +323,7 @@ module ql
                     ipc_bits <= 64;
                     bit_counter <= 0;
                   end 
-              11: begin end // kill sound
+              11: audio_state <= 0; // kill sound
               12: begin end // set ipl1
               13: begin end // set baud rate
               14: begin end // read random
@@ -343,9 +349,22 @@ module ql
             if (bit_counter == (ipc_bits - 1)) begin
               ipc_state <= 0;
               bit_counter <= 0;
+              pitch <= 10'd256 - sound_shift[63:56];
+	      duration <= beep_length;
+	      //diag16 <= pitch;
+	      audio_state <= (beep_length == 0 ? 2 : 1);
+	      audio_scale <= 0;
             end
           end
         end
+      end
+      if (audio_state == 1) begin
+        audio_scale <= audio_scale + 1;
+	if (audio_scale == 1943) begin // 70us units
+          if (duration != 0) duration <= duration - 1;
+	  else audio_state <= 0;
+	  audio_scale <= 0;
+	end
       end
     end
   end
@@ -717,12 +736,23 @@ module ql
   );
 
   // ===============================================================
-  // Audio (not yet implemented)
+  // Audio
   // ===============================================================
   wire [3:0] sound_ao;
-  assign audio_l = sound_ao;
+  wire audio_out;
+  //assign audio_l = sound_ao | {4{audio_out}};
+  assign audio_l = {4{audio_out}};
   assign audio_r = audio_l;
   wire sound_ready;
+  reg [10:0] div;
+
+  always @(posedge clk_cpu) begin
+    if (reset) div <= 0;
+    else begin
+      if (audio_state != 0) div <= div + 1;
+      else div <= 0;
+    end
+  end
 
   sn76489 #(.AUDIO_RES(4),.DIVIDER(8)) audio (
     .clk(clk_cpu),
@@ -733,6 +763,14 @@ module ql
     .ready(sound_ready),
     .d(cpu_dout[7:0]),
     .audio_out(sound_ao)
+  );
+
+  tone_generator #(0) tone (
+    .clk(clk_cpu),
+    .clk_div16_en(div[10]),
+    .reset(reset),
+    .freq(pitch),
+    .audio_out(audio_out)
   );
 
   // ===============================================================
