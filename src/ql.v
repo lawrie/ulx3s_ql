@@ -213,15 +213,20 @@ module ql
   reg  [24:0] prescaler;
   reg         mode = 1;
   reg [15:0]  ipc_ret;
-  wire [7:0]  ipc_status = {ipc_ret[15], 7'b0}; // ipc busy always false
+  reg         mdv_gap = 1;
+  reg         mdv_tx_empty;
+  reg         mdv_rx_ready = 1;
+  reg [7:0]   mdv_byte;
+  reg [7:0]   mdv_sel = 0;
+  reg [7:0]   mctrl = 0;
+  reg         gap_irq = 0;
+  wire [7:0]  ipc_status = {ipc_ret[15], 3'b0, mdv_gap, mdv_rx_ready,
+                            mdv_tx_empty, 1'b0}; // ipc busy always false  
   reg         ipc_irq = 1;
-  //wire [7:0]  irq_pending = {2'b0, timer[0], 1'b0, vsync_irq, 1'b0, ipc_irq, 1'b0};
-  wire [7:0]  irq_pending = {2'b0, timer[0], 1'b0, vsync_irq, 1'b0, 1'b0, 1'b0};
+  wire [7:0]  irq_pending = {1'b0, (mdv_sel == 0), timer[0], 1'b0, vsync_irq, 1'b0, 1'b0, gap_irq};
   reg [2:0]   irq_mask;
   reg [4:0]   irq_ack;
-  reg [7:0]   mdv_byte;
   reg [3:0]   ipc_data;
-  reg [7:0]   mctrl;
   reg [1:0]   timer_byte;
   reg         r_vSync;
   reg [5:0]   bit_counter;
@@ -270,6 +275,12 @@ module ql
     else if (ps2_key[10]) ipc_irq <= 1;
   end
 
+  // Set the gap interrupt
+  always @(posedge clk_cpu) begin
+    if (reset || irq_ack[0]) gap_irq <= 0;
+    else if (mdv_gap && irq_mask[0]) gap_irq <= 1;
+  end
+
   // I/O area writes
   reg r_ipcwr_cs;
   wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
@@ -293,6 +304,10 @@ module ql
       if (!cpu_rw) begin
         // Set the display mode 0 = 512x512, 1 = 256x256 -  $18063
         if (display_cs) mode = cpu_dout[3];
+        // Microdrive ctrl - $18020
+        if (ipcirq_cs && !cpu_uds_n) mctrl <= cpu_dout[15:8];
+        // Shift microdrive selection register when bit 1 is driven low
+        if (!cpu_dout[9] && mctrl[1]) mdv_sel <= {mdv_sel[6:0], mctrl[0]};
         // Set the irq data - $18021
         if (ipcirq_cs && !cpu_lds_n) {irq_mask, irq_ack} <= cpu_dout[7:0];
         // Set the ipc data  - $18003
@@ -301,7 +316,6 @@ module ql
           if (!cpu_dout[0]) bit_counter <= bit_counter + 1; // Ignore initial write of 1
           if (ipc_state == 0 && bit_counter[1:0] == 3) begin
             ipc_cmd <= ipc_shift;
-            //if (diag16 == 0 && ipc_shift != 1) diag16 <= ipc_shift;
             case (ipc_shift)
               0:  begin end // init
               1:  begin     // get status
@@ -309,7 +323,6 @@ module ql
                     ipc_bits <= 8;
                     bit_counter <= 0;
                     ipc_ret <= {7'b0, key_pressed, 8'b0};
-                    //diag16 <= {7'b0, key_pressed, 8'b0};
                     key_pressed <= 0;
                   end
               2:  begin end // open ser1
@@ -322,7 +335,6 @@ module ql
                     ipc_state <= 1; 
                     ipc_bits <= 16;    
                     ipc_ret <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, ~key_row, key_col};
-                    //diag16 <= {4'b0001, 1'b0, key_shift, key_ctrl, key_alt, 2'b0, key_row, key_col};
                     bit_counter <= 0;
                   end
               9:  begin     // read key row
@@ -363,7 +375,6 @@ module ql
               bit_counter <= 0;
               pitch <= 10'd256 - sound_shift[63:56];
 	      duration <= beep_length;
-	      //diag16 <= pitch;
 	      audio_state <= (beep_length == 0 ? 2 : 1);
 	      audio_scale <= 0;
             end
@@ -378,6 +389,7 @@ module ql
 	  audio_scale <= 0;
 	end
       end
+      diag16 <= {mdv_sel,mctrl};
     end
   end
 
@@ -391,7 +403,7 @@ module ql
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
                    ipcirq_cs         ? {ipc_status, irq_pending} : // $18020/18021
-                   //mdv_cs            ? {mdv_byte, mdv_byte} :
+                   mdv_cs            ? {mdv_byte, mdv_byte} :
                    cpu_a[19:18] == 0 ? ram_dout :
                                        0;
   else // BRAM all
