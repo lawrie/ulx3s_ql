@@ -33,7 +33,7 @@ class osd:
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
     self.spi_read_btn = bytearray([1,0xFB,0,0,0,0,0])
-    self.spi_read_blktyp = bytearray([1,2,0,0,0,0,0])
+    self.spi_read_blktyp = bytearray([1,0xD1,0,0,0,0,0])
     self.spi_result = bytearray(7)
     self.spi_enable_osd = bytearray([0,0xFE,0,0,0,1])
     self.spi_write_osd = bytearray([0,0xFD,0,0,0])
@@ -82,6 +82,7 @@ class osd:
       self.spi.write_readinto(self.spi_read_blktyp,self.spi_result)
       self.cs.off()
       blktyp=p8result[6]
+      print(blktyp)
       if self.diskfile:
         if blktyp==0:
           self.diskfile.seek(0)

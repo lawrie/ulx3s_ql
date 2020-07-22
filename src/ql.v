@@ -528,6 +528,8 @@ module ql
     .miso(sd_d[2]), // wifi_gpio12
     .btn(R_btn_joy),
     .irq(irq),
+    .mdv_req(R_btn_joy[1]),
+    .mdv_req_type(8'h5A),
     .wr(spi_ram_wr),
     .rd(spi_ram_rd),
     .addr(spi_ram_addr),
