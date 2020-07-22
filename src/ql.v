@@ -548,7 +548,7 @@ module ql
     .btn(R_btn_joy),
     .irq(irq),
     .mdv_req(R_btn_joy[1]),
-    .mdv_req_type(8'h5A),
+    .mdv_req_type(8'h01),
     .wr(spi_ram_wr),
     .rd(spi_ram_rd),
     .addr(spi_ram_addr),
