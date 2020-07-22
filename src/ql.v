@@ -2,7 +2,7 @@
 module ql
 #(
   parameter c_slowdown    = 0, // CPU clock slowdown 2^n times (try 20-22)
-  parameter c_lcd_hex     = 0, // SPI LCD HEX decoder
+  parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
   parameter c_diag        = 0, // 0: No LED diagnostcs, 1: LED diagnostics
@@ -583,6 +583,20 @@ module ql
   wire [15:0] ram_di = { R_spi_ram_byte[0], R_spi_ram_byte[1] }; // to SDRAM chip
 
   // ===============================================================
+  // Microdrive Buffer 1KB
+  // ===============================================================
+  wire [9:0] mdv_addr = 0;
+  wire [7:0] mdv_dout;
+  mdv_bram mdv_bram_i (
+    .clk(clk_cpu),
+    .we_a(spi_ram_wr && spi_ram_addr[31:24] == 8'hD1),
+    .addr_a(spi_ram_addr[9:0]),
+    .din_a(spi_ram_do),
+    .addr_b(mdv_addr),
+    .dout_b(mdv_dout)
+  );
+
+  // ===============================================================
   // SDRAM or BRAM for rom
   // ===============================================================
   generate
@@ -818,7 +832,8 @@ module ql
   reg [127:0] R_display;
   // HEX decoder does printf("%16X\n%16X\n", R_display[63:0], R_display[127:64]);
   always @(posedge clk_cpu)
-    R_display <= { 1'b0, R_btn_joy, cpu_dout, cpu_din, cpu_a, 1'b0 };
+    R_display <= { mdv_dout, 6'b0, mdv_addr, // 2nd HEX row
+                   1'b0, R_btn_joy, cpu_dout, cpu_din, cpu_a, 1'b0 }; // 1st HEX row
 
   parameter C_color_bits = 16;
   wire [7:0] x;
