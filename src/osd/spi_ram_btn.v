@@ -13,7 +13,7 @@
 
 module spi_ram_btn
 #(
-  parameter [7:0] c_addr_mdv = 8'hF2, // high addr byte of MDV req type
+  parameter [7:0] c_addr_mdv = 8'hD1, // high addr byte of MDV req type
   parameter [7:0] c_addr_btn = 8'hFB, // high addr byte of BTNs
   parameter [7:0] c_addr_irq = 8'hF1, // high addr byte of IRQ flag
   parameter c_debounce_bits = 20, // more -> slower BTNs
@@ -58,7 +58,10 @@ module spi_ram_btn
       // MDV req rising edge sets MDV IRQ flag
       // and stores request type in a register for later reading from SPI
       if(mdv_req == 1'b1 && R_mdv_req == 1'b0)
+      begin
         R_mdv_req_type <= mdv_req_type;
+        R_mdv_irq <= 1'b1;
+      end
       R_mdv_req <= mdv_req;
       // changed BTN state sets BTN IRQ flag
       R_btn_latch <= btn;
@@ -74,11 +77,11 @@ module spi_ram_btn
     end
   end
 
-  wire [7:0] mux_data_in = addr[c_addr_bits-1:c_addr_bits-8] == c_addr_irq ? {R_btn_irq,7'b0}
+  wire [7:0] mux_data_in = addr[c_addr_bits-1:c_addr_bits-8] == c_addr_irq ? {R_btn_irq,6'b0,R_mdv_irq}
                          : addr[c_addr_bits-1:c_addr_bits-8] == c_addr_btn ? {1'b0,R_btn}
                          : addr[c_addr_bits-1:c_addr_bits-8] == c_addr_mdv ? R_mdv_req_type
                          : data_in;
-  assign irq = R_btn_irq;
+  assign irq = R_btn_irq | R_mdv_irq;
 
   spirw_slave_v
   #(

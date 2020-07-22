@@ -82,7 +82,6 @@ class osd:
       self.spi.write_readinto(self.spi_read_blktyp,self.spi_result)
       self.cs.off()
       blktyp=p8result[6]
-      print(blktyp)
       if self.diskfile:
         if blktyp==0:
           self.diskfile.seek(0)
