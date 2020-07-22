@@ -198,9 +198,11 @@ module ql
   wire timer_cs = !vma_n && cpu_a[6:2] == 0;                   // $18000 - $18003
   wire timer_rst_cs = !vma_n && cpu_a[6:1] == 0 && !cpu_uds_n; // $18000
   wire timer_adj_cs = !vma_n && cpu_a[6:1] == 0 && !cpu_lds_n; // $18001
+  wire tctrl_cs = !vma_n && cpu_a[6:1] == 1 && !cpu_uds_n;     // $18002
   wire ipcwr_cs = !vma_n && cpu_a[6:1] == 1 && !cpu_lds_n;     // $18003
   wire ipcirq_cs = !vma_n && cpu_a[6:1] == 16;                 // $18020/21
   wire mdv_cs = !vma_n && cpu_a[6:1] == 17;                    // $18022/23
+  wire tdata_cs = mdv_cs && !cpu_uds_n;                        // $18022
   wire display_cs = !vma_n && cpu_a[6:1] == 49;                // $18063
   // Non_QL ports
   wire acia_cs  = !vma_n && cpu_a[6:2] == 1;                   // $18005 and $18007
@@ -213,8 +215,9 @@ module ql
   reg  [24:0] prescaler;
   reg         mode = 1;
   reg [15:0]  ipc_ret;
+  reg [7:0]   tctrl = 0;
   reg         mdv_gap = 1;
-  reg         mdv_tx_empty;
+  reg         mdv_tx_empty = 0;
   reg         mdv_rx_ready = 1;
   reg [7:0]   mdv_byte;
   reg [7:0]   mdv_sel = 0;
@@ -306,6 +309,8 @@ module ql
         if (display_cs) mode = cpu_dout[3];
         // Microdrive ctrl - $18020
         if (ipcirq_cs && !cpu_uds_n) mctrl <= cpu_dout[15:8];
+	// tctrl - $18002
+        if (tctrl_cs) tctrl <= cpu_dout[15:8];
         // Shift microdrive selection register when bit 1 is driven low
         if (!cpu_dout[9] && mctrl[1]) mdv_sel <= {mdv_sel[6:0], mctrl[0]};
         // Set the irq data - $18021
@@ -389,7 +394,7 @@ module ql
 	  audio_scale <= 0;
 	end
       end
-      diag16 <= {mdv_sel,mctrl};
+      if (!cpu_rw && tdata_cs) diag16 <= {tctrl, cpu_dout[15:8]};
     end
   end
 
@@ -490,12 +495,14 @@ module ql
   // 9600 8N1
   ACIA acia(
     .clk(clk_cpu),
-    .reset(!pwr_up_reset_n),
-    .cs(acia_cs),
+    .reset(reset),
+    //.cs(acia_cs),
+    .cs(tctrl_cs | tdata_cs),
     .e_clk(cpu_E),
     .rw_n(cpu_rw),
-    .rs(cpu_a[1]),
-    .data_in(cpu_dout[7:0]),
+    .rs(tdata_cs),
+    //.data_in(cpu_dout[7:0]),
+    .data_in(tctrl_cs ? 8'h01 : cpu_dout[15:8]), // Set output when anything is written to tctrl
     .data_out(acia_dout),
     .txclk(baudclk),
     .rxclk(baudclk),
