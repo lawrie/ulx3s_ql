@@ -28,6 +28,7 @@ class osd:
     self.exp_names = " KMGTE"
     self.mark = bytearray([32,16,42]) # space, right triangle, asterisk
     self.diskfile=False
+    self.preamble_buf=bytearray(12)
     self.header_buf=bytearray(16)
     self.data_buf=bytearray(518)
     self.read_dir()
@@ -37,8 +38,7 @@ class osd:
     self.spi_result = bytearray(7)
     self.spi_enable_osd = bytearray([0,0xFE,0,0,0,1])
     self.spi_write_osd = bytearray([0,0xFD,0,0,0])
-    self.spi_send_header = bytearray([0,1,0,0,0])
-    self.spi_send_data = bytearray([0,1,0,0,0])
+    self.spi_send_mdv_bram = bytearray([0,0xD1,0,0,0])
     self.spi_channel = const(2)
     self.spi_freq = const(3000000)
     self.init_pinout_sd()
@@ -83,18 +83,26 @@ class osd:
       self.cs.off()
       blktyp=p8result[6]
       if self.diskfile:
+        #print(blktyp)
         if blktyp==0:
           self.diskfile.seek(0)
-          self.diskfile.readinto(self.header_buf)
+          self.diskfile.readinto(self.preamble_buf)
           self.cs.on()
-          self.spi.write(self.spi_send_header)
-          self.spi.write(self.header_buf)
+          self.spi.write(self.spi_send_mdv_bram)
+          self.spi.write(self.preamble_buf)
           self.cs.off()
         if blktyp==1:
-          self.diskfile.seek(16)
+          self.diskfile.seek(12)
+          self.diskfile.readinto(self.header_buf)
+          self.cs.on()
+          self.spi.write(self.spi_send_mdv_bram)
+          self.spi.write(self.header_buf)
+          self.cs.off()
+        if blktyp==2:
+          self.diskfile.seek(0x28)
           self.diskfile.readinto(self.data_buf)
           self.cs.on()
-          self.spi.write(self.spi_send_data)
+          self.spi.write(self.spi_send_mdv_bram)
           self.spi.write(self.data_buf)
           self.cs.off()
     if btn_irq&0x80: # btn event IRQ flag
