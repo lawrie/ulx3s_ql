@@ -49,25 +49,30 @@ class check_mdv:
       # searching for preamble in next 1000 bytes
       j=0
       while j<1000:
-        if filedata.readinto(mv[i:i+2]): # read 2 bytes
-          if mv[i]==0xFF and mv[i+1]==0xFF and i>=10:
-            # long preamble found
-            self.mdv_state_preamble=0
-            #self.mdv_state_header=1
-            break
-          else:
-            if mv[i]==0 and mv[i+1]==0:
+        if filedata.readinto(mv[i:i+1]): # read 1 byte
+          if mv[i]==0xFF:
+            filedata.readinto(mv[i+1:i+2])
+            if mv[i+1]==0xFF and i>=10:
+              # long preamble found
+              self.mdv_state_preamble=0
+              #self.mdv_state_header=1
               i+=2
+              break
+            else:
+              i=0
+          else:
+            if mv[i]==0:
+              i+=1
             else:
               print("unexpected data at 0x%X" % filedata.tell())
-              print(bytearray(mv[i:i+2]))
+              print(bytearray(mv[i:i+1]))
               i=0
           j+=2
         else: # EOF, make it circular
           filedata.seek(0)
       if self.mdv_state_preamble==0:
         print("preamble found")
-        print(bytearray(mv[0:i+2]))
+        print(bytearray(mv[0:i]))
     else: # not pramble: header or data
       #print("state blk_id+short_preamble or header/data")
       if self.mdv_state_blkid:
@@ -100,6 +105,6 @@ class check_mdv:
 
 c=check_mdv()
 fd=open("QUILL.MDV","rb")
-#import random
-#fd.seek(random.randrange(174930)&0xFFFFFFE)
+import random
+fd.seek(random.randrange(174930)&0xFFFFFFE)
 c.run(fd)
