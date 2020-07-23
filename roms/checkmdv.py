@@ -14,6 +14,7 @@ class check_mdv:
     self.data_buf=bytearray(1024)
     self.mdv_state_sync=0
     self.mdv_state_preamble=1
+    self.mdv_state_header=1
     self.mdv_state_blkid=0
 
   def get(self,filedata):
@@ -70,22 +71,24 @@ class check_mdv:
         self.mdv_state_preamble=0
       else: # header or data
         filedata.readinto(mv[0:16])
-        if mv[0]!=0xFF:
-          # data
-          print("data at 0x%X" % filedata.tell())
-          filedata.readinto(mv[16:514])
-          print(self.data_buf[0:514])
-          self.mdv_state_sync=1
-        else: # header
-          print("header")
+        #if mv[0]==0xFF:
+        if self.mdv_state_header:
+          print("header at 0x%X" % filedata.tell())
           print(self.data_buf[0:16])
           self.mdv_state_blkid=1
         # next time expect preamble
           self.mdv_state_preamble=1
+          self.mdv_state_header=0
+        else:
+          print("data at 0x%X" % filedata.tell())
+          filedata.readinto(mv[16:514])
+          print(self.data_buf[0:514])
+          self.mdv_state_sync=1
+          self.mdv_state_header=1
 
   def run(self,filedata):
     print("running")
-    for i in range(109):
+    for i in range(1280):
       self.get(filedata)
 
 c=check_mdv()
