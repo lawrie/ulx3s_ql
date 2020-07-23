@@ -13,7 +13,7 @@
 
 module spi_ram_btn
 #(
-  parameter [7:0] c_addr_mdv = 8'hD1, // high addr byte of MDV req type
+  parameter [7:0] c_addr_mdv = 8'hD0, // high addr byte of MDV req type
   parameter [7:0] c_addr_btn = 8'hFB, // high addr byte of BTNs
   parameter [7:0] c_addr_irq = 8'hF1, // high addr byte of IRQ flag
   parameter c_debounce_bits = 20, // more -> slower BTNs
