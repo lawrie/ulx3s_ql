@@ -106,5 +106,5 @@ class check_mdv:
 c=check_mdv()
 fd=open("QUILL.MDV","rb")
 import random
-fd.seek(random.randrange(174930)&0xFFFFFFE)
+fd.seek(random.randrange(174930))
 c.run(fd)
