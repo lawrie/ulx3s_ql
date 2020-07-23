@@ -190,7 +190,7 @@ class osd:
     self.show_dir_line(oldselected)
     self.show_dir_line(self.fb_cursor - self.fb_topitem)
     if filename:
-      if filename.endswith(".mdv"):
+      if filename.endswith(".mdv") or filename.endswith(".MDV"):
         self.diskfile = open(filename,"rb")
         self.enable[0]=0
         self.osd_enable(0)
