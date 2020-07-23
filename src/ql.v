@@ -525,7 +525,8 @@ module ql
   wire [15:0] ram_do; // from SDRAM chip
   wire        spi_ram_wr, spi_ram_rd;
   wire [31:0] spi_ram_addr;
-  wire  [7:0] spi_ram_di = spi_ram_addr[0] ? ram_do[7:0] : ram_do[15:8];
+  wire  [7:0] spi_mdv_do;
+  wire  [7:0] spi_ram_di = spi_ram_addr[31:24]==8'hD1 ? spi_mdv_do : (spi_ram_addr[0] ? ram_do[7:0] : ram_do[15:8]);
   wire  [7:0] spi_ram_do;
 
   assign sd_d[0] = 1'bz;
@@ -592,8 +593,9 @@ module ql
     .we_a(spi_ram_wr && spi_ram_addr[31:24] == 8'hD1),
     .addr_a(spi_ram_addr[9:0]),
     .din_a(spi_ram_do),
-    .addr_b(mdv_addr),
-    .dout_b(mdv_dout)
+    .dout_a(spi_mdv_do),
+    .addr_b(mdv_addr), // from QL
+    .dout_b(mdv_dout)  // to QL
   );
 
   // ===============================================================
