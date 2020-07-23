@@ -27,7 +27,7 @@ class check_mdv:
       n=0
       while j<1000:
         if filedata.readinto(mv[0:1]): # read 1 bytes
-          if mv[0]==0x5A: #sync
+          if mv[0]!=0: # sync
             n+=1
             continue
           if mv[0]==0 and n>10: # end of sync, start of preamble
@@ -38,7 +38,7 @@ class check_mdv:
             i=1 # continue with preamble
             break
           else:
-            print("unexpected data")
+            print("unexpected data at 0x%X" % filedata.tell())
             print(bytearray(mv[0:1]))
             n=0
         else: # EOF, make it circular
