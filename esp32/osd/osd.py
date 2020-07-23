@@ -29,10 +29,11 @@ class osd:
     self.mark = bytearray([32,16,42]) # space, right triangle, asterisk
     self.diskfile=False
     self.data_buf=bytearray(514)
-    self.data_byte_mv=memoryview(self.data_buf[0:1])
-    self.data_preamble_mv=memoryview(self.data_buf[0:12])
-    self.data_header_mv=memoryview(self.data_buf[0:16])
-    self.data_restof_mv=memoryview(self.data_buf[16:514])
+    self.data_mv=memoryview(self.data_buf)
+    #self.data_byte_mv=memoryview(self.data_buf[0:1])
+    #self.data_preamble_mv=memoryview(self.data_buf[0:12])
+    #self.data_header_mv=memoryview(self.data_buf[0:16])
+    #self.data_restof_mv=memoryview(self.data_buf[16:514])
     self.mdv_state=bytearray([0,1,1,0]) # sync, preamble, blkid, header
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
@@ -372,17 +373,20 @@ class osd:
       if stat[0] & 0o170000 != 0o040000:
         self.direntries.append([fname,0,stat[6]]) # file
 
-  @micropython.viper
+  #@micropython.viper
   def mdv_read(self):
+    #print(int(self.diskfile.tell()))
     i=0
-    p8state=ptr8(addressof(self.mdv_state))
-    p8db=ptr8(addressof(self.data_buf))
+    #p8state=ptr8(addressof(self.mdv_state))
+    #p8db=ptr8(addressof(self.data_buf))
+    p8state=memoryview(self.mdv_state)
+    p8db=memoryview(self.data_buf)
     if p8state[0]:
       # search for sync in next 1000 byte
       j=0
       n=0
       while j<1000:
-        if self.diskfile.readinto(self.data_byte_mv):
+        if self.diskfile.readinto(self.data_mv[0:1]):
           if p8db[0]: # sync
             n+=1
             continue
@@ -405,9 +409,9 @@ class osd:
       # searching for preamble in next 1000 bytes
       j=0
       while j<1000:
-        if self.diskfile.readinto(self.data_byte_mv):
+        if self.diskfile.readinto(self.data_mv[0:1]):
           if p8db[0]==0xFF:
-            self.diskfile.readinto(self.data_byte_mv)
+            self.diskfile.readinto(self.data_mv[0:1])
             if p8db[0]==0xFF and i>=10:
               # long preamble found
               p8state[1]=0 # preamble
@@ -428,30 +432,28 @@ class osd:
           self.diskfile.seek(0)
       if p8state[1]==0:
         print("preamble found")
-        return # NOTE debug
         #print(bytearray(p8db[0:i]))
     else: # not pramble: header or data
-      return # NOTE debug
       #print("state blk_id+short_preamble or header/data")
       if p8state[2]:
-        self.diskfile.readinto(self.data_preamble_mv)
-        print("blkid+short_preamble")
-        #print(self.data_buf[0:12])
+        self.diskfile.readinto(self.data_mv[0:12])
+        #print("blkid+short_preamble")
+        print(self.data_buf[0:12])
         p8state[1]=0 # preamble
         p8state[2]=0 # blkid
       else: # header or data
-        self.diskfile.readinto(self.data_header_mv)
+        self.diskfile.readinto(self.data_mv[0:16])
         #if p8db[0]==0xFF:
         if p8state[3]:
           #print("header at 0x%X" % self.diskfile.tell())
-          #print(self.data_buf[0:16])
+          print(self.data_buf[0:16])
           p8state[1]=1 # preamble
           p8state[2]=1 # blkid
           p8state[3]=0 # header
         else:
           #print("data at 0x%X" % self.diskfile.tell())
-          self.diskfile.readinto(self.data_restof_mv)
-          #print(self.data_buf[0:514])
+          self.diskfile.readinto(self.data_mv[16:254])
+          print(self.data_buf[0:514])
           p8state[0]=1 # sync
           p8state[3]=1 # header
     #self.diskfile.seek(0x28)
