@@ -26,20 +26,20 @@ class check_mdv:
       j=0
       n=0
       while j<1000:
-        if filedata.readinto(mv[0:2]): # read 2 bytes
-          if mv[0]==0x5A and mv[1]==0x5A: #sync
+        if filedata.readinto(mv[0:1]): # read 1 bytes
+          if mv[0]==0x5A: #sync
             n+=1
             continue
-          if mv[0]==0 and mv[1]==0 and n>10: # end of sync, start of preamble
+          if mv[0]==0 and n>10: # end of sync, start of preamble
             print("end of sync found at 0x%X" % filedata.tell())
             self.mdv_state_sync=0
             self.mdv_state_preamble=1
             #self.mdv_state_header=1
-            i=2 # continue with preamble
+            i=1 # continue with preamble
             break
           else:
             print("unexpected data")
-            print(bytearray(mv[0:2]))
+            print(bytearray(mv[0:1]))
             n=0
         else: # EOF, make it circular
           filedata.seek(0)
