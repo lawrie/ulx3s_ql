@@ -449,7 +449,7 @@ class osd:
           p8state[3]=0 # header
         else:
           #print("data at 0x%X" % self.diskfile.tell())
-          self.diskfile.readinto(self.data_mv[16:254])
+          self.diskfile.readinto(self.data_mv[16:514])
           #print(self.data_buf[0:514])
           len=514
           p8state[0]=1 # sync
