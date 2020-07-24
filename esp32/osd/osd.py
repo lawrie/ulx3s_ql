@@ -28,11 +28,9 @@ class osd:
     self.exp_names = " KMGTE"
     self.mark = bytearray([32,16,42]) # space, right triangle, asterisk
     self.diskfile=False
-    self.data_buf=bytearray(514)
+    self.data_buf=bytearray(534)
     self.data_mv=memoryview(self.data_buf)
-    self.preamble=bytearray(12)
-    self.preamble[10]=0xFF
-    self.preamble[11]=0xFF
+    self.mdv_byte=bytearray(1)
     self.mdv_state=bytearray([0,1,1,0]) # sync, preamble, blkid, header
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
@@ -371,67 +369,48 @@ class osd:
       if stat[0] & 0o170000 != 0o040000:
         self.direntries.append([fname,0,stat[6]]) # file
 
-  def mdv_read(self):
+
+  def mdv_skip_preamble(self,n)->int:
     i=0
-    if self.mdv_state[1]: # preamble
-      # search for preamble in next 1000 byte
-      len=0
-      j=0
-      while j<1000:
-        if self.diskfile.readinto(self.data_mv[0:1]):
-          if self.data_mv[0]==0xFF:
-            self.diskfile.readinto(self.data_mv[0:1])
-            if self.data_mv[0]==0xFF and i>=10:
-              # long preamble found
-              self.mdv_state[1]=0 # preamble
-              #self.mdv_state_header=1
-              i+=2
-              break
-            else:
-              i=0
+    j=0
+    found=0
+    while j<n:
+      if self.diskfile.readinto(self.mdv_byte):
+        if self.mdv_byte[0]==0xFF:
+          self.diskfile.readinto(self.mdv_byte)
+          if self.mdv_byte[0]==0xFF and i>=10:
+            found=1
+            i+=2
+            break
           else:
-            if self.data_mv[0]==0:
-              i+=1
-            else:
-              #print("unexpected data at 0x%X" % self.diskfile.tell())
-              i=0
-          j+=2
-        else: # EOF, make it circular
-          self.diskfile.seek(0)
-      if self.mdv_state[1]==0:
-        self.data_mv[0:12]=self.preamble
-        len=12
-    else: # not pramble: header or data
-      #print("state blk_id+short_preamble or header/data")
-      if self.mdv_state[2]:
-        self.diskfile.readinto(self.data_mv[0:12])
-        #print(self.data_buf[0:12])
-        len=12
-        self.mdv_state[1]=0 # preamble
-        self.mdv_state[2]=0 # blkid
-      else: # header or data
-        self.diskfile.readinto(self.data_mv[0:16])
-        if self.mdv_state[3]:
-          #print("header at 0x%X" % self.diskfile.tell())
-          #print(self.data_buf[0:16])
-          len=16
-          self.mdv_state[1]=1 # preamble
-          self.mdv_state[2]=1 # blkid
-          self.mdv_state[3]=0 # header
+            i=0
         else:
-          #print("data at 0x%X" % self.diskfile.tell())
-          self.diskfile.readinto(self.data_mv[16:514])
-          #print(self.data_buf[0:514])
-          len=514
-          self.mdv_state[0]=1 # sync
-          self.mdv_state[1]=1 # preamble
-          self.mdv_state[3]=1 # header
-    if len:
-      print(self.data_buf[0:len])
+          if self.mdv_byte[0]==0:
+            i+=1
+          else:
+            i=0
+        j+=2
+      else: # EOF, make it circular
+        self.diskfile.seek(0)
+    if found:
+      return i
+    return 0
+
+  def mdv_read(self):
+    if self.mdv_skip_preamble(1000):
+      self.diskfile.readinto(self.data_mv[0:16])
+      self.diskfile.seek(12,1) # seek_cur skip preamble
+      self.diskfile.readinto(self.data_mv[16:20])
+      self.diskfile.seek(8,1) # seek_cur skip preamble
+      self.diskfile.readinto(self.data_mv[20:534])
+      #print(self.data_buf) # full buffer
+      print(self.data_buf[0:24]) # first 24 bytes
       self.cs.on()
       self.spi.write(self.spi_send_mdv_bram)
-      self.spi.write(self.data_mv[0:len])
+      self.spi.write(self.data_buf)
       self.cs.off()
+    else:
+      print("MDV: preamble not found")
 
 
   # NOTE: this can be used for debugging
