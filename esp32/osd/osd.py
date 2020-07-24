@@ -389,7 +389,7 @@ class osd:
         j+=1
       else: # EOF, make it circular
         self.diskfile.seek(0)
-        print("MDV: wraparound")
+        print("MDV: wraparound",self.data_buf[2:12].decode("utf-8"))
     if found:
       return i
     return 0
@@ -457,7 +457,7 @@ def peek(addr,length=1):
 def poke(addr,data):
   run.poke(addr,data)
 
-bitstream="/sd/ql/bitstreams/ulx3s_85f_ql.bit"
+bitstream="/sd/ql/bitstreams/ulx3s_12f_ql.bit"
 try:
   os.mount(SDCard(slot=3),"/sd")
   ecp5.prog(bitstream)
