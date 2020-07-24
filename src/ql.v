@@ -227,6 +227,7 @@ module ql
   reg [9:0]   mdv_addr = 0;
   wire [7:0]  mdv_dout;
   reg         mdv_gap = 0;
+  reg         mdv_req = 0;
   reg         mdv_tx_empty = 0;
   reg         mdv_rx_ready = 1;
   reg [7:0]   mdv_sel = 0;
@@ -314,6 +315,7 @@ module ql
       end
     end else if (mdv_state == MDV_GAP) begin
       spi_irq <= gap_counter < 8;  // Request data
+      mdv_req <= gap_counter < 8;  // Request data
       if (gap_counter == (c_gap_clk_count -1)) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
@@ -328,9 +330,9 @@ module ql
       mctrl <= cpu_dout[15:8];
       // Select the microdrive
       if (!cpu_dout[9] && mctrl[1]) begin
-        mdv_sel <= {mdv_sel[6:0], mctrl[0]};
+        mdv_sel <= {mdv_sel[6:0], cpu_dout[8]};
         gap_counter <= 0;
-        if (mctrl[0]) begin
+        if (cpu_dout[8]) begin
           mdv_state <= MDV_GAP;
           mdv_gap <= 1;
         end else begin
@@ -343,7 +345,7 @@ module ql
     if (mdv_state == MDV_READING && !(cpu_rw && mdv_cs) && r_mdv_rd_cs) begin
       mdv_addr <= mdv_addr + 1;
       if (mdv_addr + 1 > addr_max) addr_max <= mdv_addr + 1;
-      diag16 <= mdv_dout;
+      if (mdv_addr == 14) diag16 <= mdv_dout;
       gap_counter <= 0; // Reset gap timer on reads
     end
   end
@@ -604,7 +606,7 @@ module ql
     .miso(sd_d[2]), // wifi_gpio12
     .btn(R_btn_joy),
     .irq(spi_irq),
-    .mdv_req(R_btn_joy[1]),
+    .mdv_req(mdv_req),
     .mdv_req_type(8'h01),
     .wr(spi_ram_wr),
     .rd(spi_ram_rd),
