@@ -236,7 +236,6 @@ module ql
   wire        mdv_gap_present = !mdv_present | mdv_gap;
   reg [17:0]  gap_counter;
   reg         gap_irq = 0;
-  reg         spi_irq;
 
   wire [7:0]  ipc_status = {ipc_ret[15], 3'b0, mdv_gap_present, mdv_rx_ready,
                             mdv_tx_empty, 1'b0}; // ipc busy always false
@@ -314,7 +313,6 @@ module ql
         gap_counter <= gap_counter + 1;
       end
     end else if (mdv_state == MDV_GAP) begin
-      spi_irq <= gap_counter < 8;  // Request data
       mdv_req <= gap_counter < 8;  // Request data
       if (gap_counter == (c_gap_clk_count -1)) begin
         mdv_state <= MDV_READING;
@@ -592,6 +590,7 @@ module ql
   assign sd_d[0] = 1'bz;
   assign sd_d[3] = 1'bz; // FPGA pin pullup sets SD card inactive at SPI bus
 
+  wire spi_irq;
   spi_ram_btn
   #(
     .c_sclk_capable_pin(1'b0),
