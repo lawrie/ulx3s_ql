@@ -28,8 +28,7 @@ class osd:
     self.exp_names = " KMGTE"
     self.mark = bytearray([32,16,42]) # space, right triangle, asterisk
     self.diskfile=False
-    self.data_buf=bytearray(534)
-    self.data_mv=memoryview(self.data_buf)
+    self.data_buf=bytearray(554)
     self.mdv_byte=bytearray(1)
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
@@ -390,23 +389,22 @@ class osd:
         j+=1
       else: # EOF, make it circular
         self.diskfile.seek(0)
+        print("MDV: wraparound")
     if found:
       return i
     return 0
 
   def mdv_read(self):
     if self.mdv_skip_preamble(1000):
-      self.diskfile.readinto(self.data_mv[0:16])
-      self.diskfile.seek(12,1) # seek_cur skip preamble
-      self.diskfile.readinto(self.data_mv[16:20])
-      self.diskfile.seek(8,1) # seek_cur skip preamble
-      self.diskfile.readinto(self.data_mv[20:534])
-      #print(self.data_buf) # full buffer
-      print(self.data_buf[0:24]) # first 24 bytes
+      self.diskfile.readinto(self.data_buf)
       self.cs.on()
       self.spi.write(self.spi_send_mdv_bram)
-      self.spi.write(self.data_buf)
+      self.spi.write(self.data_buf[0:16])
+      self.spi.write(self.data_buf[28:32])
+      self.spi.write(self.data_buf[40:554])
       self.cs.off()
+      #print(self.data_buf[1],self.data_buf[2:12]) # block number, volume name
+      #print(self.data_buf[0:16],self.data_buf[28:32],self.data_buf[40:44]) # block number, volume name
     else:
       print("MDV: preamble not found")
 
