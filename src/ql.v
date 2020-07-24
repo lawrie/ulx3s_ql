@@ -5,7 +5,7 @@ module ql
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
   parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
-  parameter c_diag        = 0, // 0: No LED diagnostcs, 1: LED diagnostics
+  parameter c_diag        = 1, // 0: No LED diagnostcs, 1: LED diagnostics
   parameter c_acia_serial = 0, // 0: disabled, 1: ACIA serial
   parameter c_esp32_serial= 1, // 0: disabled, 1: ESP32 serial (micropython console)
   parameter c_mhz         = 27000000 // Clock speed of CPU clock
@@ -59,6 +59,13 @@ module ql
   // Leds
   output [7:0]  leds
 );
+
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 5.0); // gap is 5ms
+  
+  localparam MDV_IDLE = 0;
+  localparam MDV_GAP = 1;
+  localparam MDV_READING = 2;
+  localparam MDV_WRITING = 3;
 
   // ===============================================================
   // System Clock generation
@@ -184,7 +191,7 @@ module ql
   reg  bgack_n = 1'b1;           // Bus grant ack
   reg  vsync_irq;
   reg  ipl0_n = 1'b1;            // Interrupt request signals
-  reg  ipl1_n = !vsync_irq;
+  reg  ipl1_n = !(vsync_irq | gap_irq);
   reg  ipl2_n = 1'b1;
   wire [15:0] ram_dout;
   wire [15:0] rom_dout;
@@ -216,15 +223,22 @@ module ql
   reg         mode = 1;
   reg [15:0]  ipc_ret;
   reg [7:0]   tctrl = 0;
-  reg         mdv_gap = 1;
+  reg [1:0]   mdv_state;
+  reg [9:0]   mdv_addr = 0;
+  wire [7:0]  mdv_dout;
+  reg         mdv_gap = 0;
   reg         mdv_tx_empty = 0;
   reg         mdv_rx_ready = 1;
-  reg [7:0]   mdv_byte;
   reg [7:0]   mdv_sel = 0;
   reg [7:0]   mctrl = 0;
+  reg         mdv_present = 1;
+  wire        mdv_gap_present = !mdv_present | mdv_gap;
+  reg [17:0]  gap_counter;
   reg         gap_irq = 0;
-  wire [7:0]  ipc_status = {ipc_ret[15], 3'b0, mdv_gap, mdv_rx_ready,
-                            mdv_tx_empty, 1'b0}; // ipc busy always false  
+  reg         spi_irq;
+
+  wire [7:0]  ipc_status = {ipc_ret[15], 3'b0, mdv_gap_present, mdv_rx_ready,
+                            mdv_tx_empty, 1'b0}; // ipc busy always false
   reg         ipc_irq = 1;
   wire [7:0]  irq_pending = {1'b0, (mdv_sel == 0), timer[0], 1'b0, vsync_irq, 1'b0, 1'b0, gap_irq};
   reg [2:0]   irq_mask;
@@ -284,7 +298,57 @@ module ql
     else if (mdv_gap && irq_mask[0]) gap_irq <= 1;
   end
 
-  // I/O area writes
+  reg [9:0] addr_max = 0;
+
+  // Microdrive reads and status writes
+  reg r_mdv_rd_cs;
+  always @(posedge clk_cpu) begin
+    r_mdv_rd_cs <= cpu_rw && mdv_cs;
+    if (mdv_state == MDV_READING) begin
+      if (gap_counter == (c_gap_clk_count - 1)) begin
+        mdv_state <= MDV_GAP;
+        gap_counter <= 0;
+        mdv_gap <= 1;
+      end else begin
+        gap_counter <= gap_counter + 1;
+      end
+    end else if (mdv_state == MDV_GAP) begin
+      spi_irq <= gap_counter < 8;  // Request data
+      if (gap_counter == (c_gap_clk_count -1)) begin
+        mdv_state <= MDV_READING;
+        mdv_gap <= 0;
+	gap_counter <= 0;
+	mdv_addr <= 0;
+      end else begin
+        gap_counter <= gap_counter +1;
+      end
+    end
+    // Selecting mdv1 starts reading the microdrive data
+    if (!cpu_rw && ipcirq_cs && !cpu_uds_n) begin
+      mctrl <= cpu_dout[15:8];
+      // Select the microdrive
+      if (!cpu_dout[9] && mctrl[1]) begin
+        mdv_sel <= {mdv_sel[6:0], mctrl[0]};
+        gap_counter <= 0;
+        if (mctrl[0]) begin
+          mdv_state <= MDV_GAP;
+          mdv_gap <= 1;
+        end else begin
+          mdv_state <= MDV_IDLE;
+          mdv_gap <= 0;
+        end
+      end
+    end
+    // If we are reading header or data, advance address on cycle after read
+    if (mdv_state == MDV_READING && !(cpu_rw && mdv_cs) && r_mdv_rd_cs) begin
+      mdv_addr <= mdv_addr + 1;
+      if (mdv_addr + 1 > addr_max) addr_max <= mdv_addr + 1;
+      diag16 <= mdv_dout;
+      gap_counter <= 0; // Reset gap timer on reads
+    end
+  end
+
+  // Other I/O area writes
   reg r_ipcwr_cs;
   wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
   wire [63:0] sound_shift = {ipc_sound[62:0], cpu_dout[1]};
@@ -293,7 +357,6 @@ module ql
     if (reset) begin
       bit_counter <= 0;
       ipc_data <= 0;
-      diag16 <= 0;
       ipc_cmd <= 0;
       mode <= 1;
       irq_mask <= 0;
@@ -307,12 +370,8 @@ module ql
       if (!cpu_rw) begin
         // Set the display mode 0 = 512x512, 1 = 256x256 -  $18063
         if (display_cs) mode = cpu_dout[3];
-        // Microdrive ctrl - $18020
-        if (ipcirq_cs && !cpu_uds_n) mctrl <= cpu_dout[15:8];
-	// tctrl - $18002
+        // tctrl - $18002
         if (tctrl_cs) tctrl <= cpu_dout[15:8];
-        // Shift microdrive selection register when bit 1 is driven low
-        if (!cpu_dout[9] && mctrl[1]) mdv_sel <= {mdv_sel[6:0], mctrl[0]};
         // Set the irq data - $18021
         if (ipcirq_cs && !cpu_lds_n) {irq_mask, irq_ack} <= cpu_dout[7:0];
         // Set the ipc data  - $18003
@@ -379,22 +438,21 @@ module ql
               ipc_state <= 0;
               bit_counter <= 0;
               pitch <= 10'd256 - sound_shift[63:56];
-	      duration <= beep_length;
-	      audio_state <= (beep_length == 0 ? 2 : 1);
-	      audio_scale <= 0;
+              duration <= beep_length;
+              audio_state <= (beep_length == 0 ? 2 : 1);
+              audio_scale <= 0;
             end
           end
         end
       end
       if (audio_state == 1) begin
         audio_scale <= audio_scale + 1;
-	if (audio_scale == 1943) begin // 70us units
+        if (audio_scale == 1943) begin // 70us units
           if (duration != 0) duration <= duration - 1;
-	  else audio_state <= 0;
-	  audio_scale <= 0;
-	end
+          else audio_state <= 0;
+          audio_scale <= 0;
+        end
       end
-      if (!cpu_rw && tdata_cs) diag16 <= {tctrl, cpu_dout[15:8]};
     end
   end
 
@@ -408,7 +466,7 @@ module ql
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
                    ipcirq_cs         ? {ipc_status, irq_pending} : // $18020/18021
-                   mdv_cs            ? {mdv_byte, mdv_byte} :
+                   mdv_cs            ? {mdv_dout, mdv_dout} :
                    cpu_a[19:18] == 0 ? ram_dout :
                                        0;
   else // BRAM all
@@ -532,8 +590,6 @@ module ql
   assign sd_d[0] = 1'bz;
   assign sd_d[3] = 1'bz; // FPGA pin pullup sets SD card inactive at SPI bus
 
-  wire irq;
-
   spi_ram_btn
   #(
     .c_sclk_capable_pin(1'b0),
@@ -547,7 +603,7 @@ module ql
     .mosi(sd_d[1]), // wifi_gpio4
     .miso(sd_d[2]), // wifi_gpio12
     .btn(R_btn_joy),
-    .irq(irq),
+    .irq(spi_irq),
     .mdv_req(R_btn_joy[1]),
     .mdv_req_type(8'h01),
     .wr(spi_ram_wr),
@@ -558,7 +614,7 @@ module ql
   );
 
   // Used for interrupt to ESP32
-  assign wifi_gpio0 = ~irq;
+  assign wifi_gpio0 = ~spi_irq;
 
   reg [7:0] R_spi_ram_byte[0:1];
   reg R_spi_ram_wr;
@@ -586,8 +642,6 @@ module ql
   // ===============================================================
   // Microdrive Buffer 1KB
   // ===============================================================
-  wire [9:0] mdv_addr = 0;
-  wire [7:0] mdv_dout;
   mdv_bram mdv_bram_i (
     .clk(clk_cpu),
     .we_a(spi_ram_wr && spi_ram_addr[31:24] == 8'hD1),
@@ -692,8 +746,8 @@ module ql
                    kbd_matrix[55:48] ? 6 : 7;
 
   wire [7:0]  col = kbd_matrix[{key_row, 3'b111} -: 8] & 
-	            (key_row == 7 && kbd_matrix[58:56] != 0 && 
-		     kbd_matrix[63:59] != 0 ? 8'hf8 : 8'hff);
+                    (key_row == 7 && kbd_matrix[58:56] != 0 && 
+                     kbd_matrix[63:59] != 0 ? 8'hf8 : 8'hff);
 
   assign key_col = col[0] ? 0 :
                    col[1] ? 1 :
