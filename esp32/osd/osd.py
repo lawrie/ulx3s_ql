@@ -76,7 +76,7 @@ class osd:
     self.gpio_sck  = const(16)
     self.gpio_mosi = const(4)
     self.gpio_miso = const(12)
-  
+
   @micropython.viper
   def irq_handler(self, pin):
     p8result = ptr8(addressof(self.spi_result))
@@ -380,28 +380,6 @@ class osd:
     i=0
     p8state=memoryview(self.mdv_state)
     p8db=memoryview(self.data_buf)
-    if p8state[0]:
-      # search for sync in next 1000 byte
-      j=0
-      n=0
-      while j<1000:
-        if self.diskfile.readinto(self.data_mv[0:1]):
-          if p8db[0]: # sync
-            n+=1
-            continue
-          if p8db[0]==0 and n>10:
-            #print("end of sync found at 0x%X" % self.diskfile.tell())
-            p8state[0]=0 # sync
-            p8state[1]=1 # preamble
-            #p8state_header=1
-            i=1 # continue with preamble
-            break
-          else:
-            #print("unexpected data at 0x%X" % self.diskfile.tell())
-            n=0
-        else: # EOF, make it circular
-          self.diskfile.seek(0)
-        j+=2
     if p8state[1]: # preamble
       # search for preamble in next 1000 byte
       len=0
@@ -453,6 +431,7 @@ class osd:
           #print(self.data_buf[0:514])
           len=514
           p8state[0]=1 # sync
+          p8state[1]=1 # preamble
           p8state[3]=1 # header
     if len:
       print(self.data_buf[0:len])
