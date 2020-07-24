@@ -33,10 +33,6 @@ class osd:
     self.preamble=bytearray(12)
     self.preamble[10]=0xFF
     self.preamble[11]=0xFF
-    #self.data_byte_mv=memoryview(self.data_buf[0:1])
-    #self.data_preamble_mv=memoryview(self.data_buf[0:12])
-    #self.data_header_mv=memoryview(self.data_buf[0:16])
-    #self.data_restof_mv=memoryview(self.data_buf[16:514])
     self.mdv_state=bytearray([0,1,1,0]) # sync, preamble, blkid, header
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
@@ -49,7 +45,6 @@ class osd:
     self.spi_channel = const(2)
     self.spi_freq = const(3000000)
     self.init_pinout_sd()
-    #self.spi=SPI(self.spi_channel, baudrate=self.spi_freq, polarity=0, phase=0, bits=8, firstbit=SPI.MSB, sck=Pin(self.gpio_sck), mosi=Pin(self.gpio_mosi), miso=Pin(self.gpio_miso))
     self.init_spi()
     alloc_emergency_exception_buf(100)
     self.enable = bytearray(1)
@@ -378,26 +373,24 @@ class osd:
 
   def mdv_read(self):
     i=0
-    p8state=memoryview(self.mdv_state)
-    p8db=memoryview(self.data_buf)
-    if p8state[1]: # preamble
+    if self.mdv_state[1]: # preamble
       # search for preamble in next 1000 byte
       len=0
       j=0
       while j<1000:
         if self.diskfile.readinto(self.data_mv[0:1]):
-          if p8db[0]==0xFF:
+          if self.data_mv[0]==0xFF:
             self.diskfile.readinto(self.data_mv[0:1])
-            if p8db[0]==0xFF and i>=10:
+            if self.data_mv[0]==0xFF and i>=10:
               # long preamble found
-              p8state[1]=0 # preamble
-              #p8state_header=1
+              self.mdv_state[1]=0 # preamble
+              #self.mdv_state_header=1
               i+=2
               break
             else:
               i=0
           else:
-            if p8db[0]==0:
+            if self.data_mv[0]==0:
               i+=1
             else:
               #print("unexpected data at 0x%X" % self.diskfile.tell())
@@ -405,34 +398,34 @@ class osd:
           j+=2
         else: # EOF, make it circular
           self.diskfile.seek(0)
-      if p8state[1]==0:
+      if self.mdv_state[1]==0:
         self.data_mv[0:12]=self.preamble
         len=12
     else: # not pramble: header or data
       #print("state blk_id+short_preamble or header/data")
-      if p8state[2]:
+      if self.mdv_state[2]:
         self.diskfile.readinto(self.data_mv[0:12])
         #print(self.data_buf[0:12])
         len=12
-        p8state[1]=0 # preamble
-        p8state[2]=0 # blkid
+        self.mdv_state[1]=0 # preamble
+        self.mdv_state[2]=0 # blkid
       else: # header or data
         self.diskfile.readinto(self.data_mv[0:16])
-        if p8state[3]:
+        if self.mdv_state[3]:
           #print("header at 0x%X" % self.diskfile.tell())
           #print(self.data_buf[0:16])
           len=16
-          p8state[1]=1 # preamble
-          p8state[2]=1 # blkid
-          p8state[3]=0 # header
+          self.mdv_state[1]=1 # preamble
+          self.mdv_state[2]=1 # blkid
+          self.mdv_state[3]=0 # header
         else:
           #print("data at 0x%X" % self.diskfile.tell())
           self.diskfile.readinto(self.data_mv[16:514])
           #print(self.data_buf[0:514])
           len=514
-          p8state[0]=1 # sync
-          p8state[1]=1 # preamble
-          p8state[3]=1 # header
+          self.mdv_state[0]=1 # sync
+          self.mdv_state[1]=1 # preamble
+          self.mdv_state[3]=1 # header
     if len:
       print(self.data_buf[0:len])
       self.cs.on()
