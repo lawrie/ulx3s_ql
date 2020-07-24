@@ -430,21 +430,25 @@ class osd:
     self.cs.off()
 
   def peek(self,addr,length):
-    self.ctrl(2)
+    self.ctrl(4)
+    self.ctrl(6)
     self.cs.on()
     self.spi.write(bytearray([1,(addr >> 24) & 0xFF, (addr >> 16) & 0xFF, (addr >> 8) & 0xFF, addr & 0xFF, 0]))
     b=bytearray(length)
     self.spi.readinto(b)
     self.cs.off()
+    self.ctrl(4)
     self.ctrl(0)
     return b
 
   def poke(self,addr,data):
-    self.ctrl(2)
+    self.ctrl(4)
+    self.ctrl(6)
     self.cs.on()
     self.spi.write(bytearray([0,(addr >> 24) & 0xFF, (addr >> 16) & 0xFF, (addr >> 8) & 0xFF, addr & 0xFF]))
     self.spi.write(data)
     self.cs.off()
+    self.ctrl(4)
     self.ctrl(0)
 
 def peek(addr,length=1):
@@ -453,7 +457,7 @@ def peek(addr,length=1):
 def poke(addr,data):
   run.poke(addr,data)
 
-bitstream="/sd/ql/bitstreams/ulx3s_12f_ql.bit"
+bitstream="/sd/ql/bitstreams/ulx3s_85f_ql.bit"
 try:
   os.mount(SDCard(slot=3),"/sd")
   ecp5.prog(bitstream)
