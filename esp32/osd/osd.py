@@ -368,28 +368,26 @@ class osd:
       if stat[0] & 0o170000 != 0o040000:
         self.direntries.append([fname,0,stat[6]]) # file
 
-  @micropython.viper
   def mdv_skip_preamble(self,n:int)->int:
-    p8b=ptr8(addressof(self.mdv_byte))
     i=0
     j=0
     found=0
     while j<n:
       if self.diskfile.readinto(self.mdv_byte):
-        if p8b[0]==0xFF:
+        if self.mdv_byte[0]==0xFF:
           self.diskfile.readinto(self.mdv_byte)
-          if p8b[0]==0xFF and i>=10:
+          if self.mdv_byte[0]==0xFF and i>=10:
             found=1
             i+=2
             break
           else:
             i=0
         else:
-          if p8b[0]==0:
+          if self.mdv_byte[0]==0:
             i+=1
           else:
             i=0
-        j+=2
+        j+=1
       else: # EOF, make it circular
         self.diskfile.seek(0)
     if found:
