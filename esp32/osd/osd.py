@@ -31,7 +31,6 @@ class osd:
     self.data_buf=bytearray(534)
     self.data_mv=memoryview(self.data_buf)
     self.mdv_byte=bytearray(1)
-    self.mdv_state=bytearray([0,1,1,0]) # sync, preamble, blkid, header
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
     self.spi_read_btn = bytearray([1,0xFB,0,0,0,0,0])
@@ -369,23 +368,24 @@ class osd:
       if stat[0] & 0o170000 != 0o040000:
         self.direntries.append([fname,0,stat[6]]) # file
 
-
-  def mdv_skip_preamble(self,n)->int:
+  @micropython.viper
+  def mdv_skip_preamble(self,n:int)->int:
+    p8b=ptr8(addressof(self.mdv_byte))
     i=0
     j=0
     found=0
     while j<n:
       if self.diskfile.readinto(self.mdv_byte):
-        if self.mdv_byte[0]==0xFF:
+        if p8b[0]==0xFF:
           self.diskfile.readinto(self.mdv_byte)
-          if self.mdv_byte[0]==0xFF and i>=10:
+          if p8b[0]==0xFF and i>=10:
             found=1
             i+=2
             break
           else:
             i=0
         else:
-          if self.mdv_byte[0]==0:
+          if p8b[0]==0:
             i+=1
           else:
             i=0
