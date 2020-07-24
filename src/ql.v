@@ -527,7 +527,7 @@ module ql
     .DTACKn(dtack_n),
     .VPAn(vpa_n),
     .BERRn(berr_n),
-    .BRn(1'b1), // no bus request
+    .BRn(~R_cpu_control[2]), // no bus request
     .BGACKn(1'b1),
     .IPL0n(ipl0_n),
     .IPL1n(ipl1_n),
