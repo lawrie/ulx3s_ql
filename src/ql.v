@@ -60,7 +60,7 @@ module ql
   output [7:0]  leds
 );
 
-  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 5.0); // gap is 5ms
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 9.0); // gap is 9ms
   
   localparam MDV_IDLE = 0;
   localparam MDV_GAP = 1;
@@ -889,7 +889,7 @@ module ql
   reg [127:0] R_display;
   // HEX decoder does printf("%16X\n%16X\n", R_display[63:0], R_display[127:64]);
   always @(posedge clk_cpu)
-    R_display <= { mdv_dout, 6'b0, mdv_addr, // 2nd HEX row
+    R_display <= { 6'b0, addr_max, mdv_dout, 6'b0, mdv_addr, // 2nd HEX row
                    1'b0, R_btn_joy, cpu_dout, cpu_din, cpu_a, 1'b0 }; // 1st HEX row
 
   parameter C_color_bits = 16;
