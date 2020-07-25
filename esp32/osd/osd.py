@@ -31,6 +31,7 @@ class osd:
     self.diskfile=False
     self.data_buf=bytearray(554)
     self.mdv_byte=bytearray(1)
+    self.mdv_phase=bytearray([1])
     self.read_dir()
     self.spi_read_irq = bytearray([1,0xF1,0,0,0,0,0])
     self.spi_read_btn = bytearray([1,0xFB,0,0,0,0,0])
@@ -411,14 +412,19 @@ class osd:
       print("MDV: preamble not found")
 
   def mdv_read(self):
-    self.cs.on()
-    self.spi.write(self.spi_send_mdv_bram)
-    self.spi.write(self.data_buf[0:16])
-    self.spi.write(self.data_buf[28:32])
-    self.spi.write(self.data_buf[40:554])
-    self.cs.off()
-    self.mdv_refill_buf()
-
+    if self.mdv_phase[0]:
+      self.cs.on()
+      self.spi.write(self.spi_send_mdv_bram)
+      self.spi.write(self.data_buf[0:16])
+      self.cs.off()
+    else:
+      self.cs.on()
+      self.spi.write(self.spi_send_mdv_bram)
+      self.spi.write(self.data_buf[28:32])
+      self.spi.write(self.data_buf[40:554])
+      self.cs.off()
+      self.mdv_refill_buf()
+    self.mdv_phase[0]^=1
 
   # NOTE: this can be used for debugging
   #def osd(self, a):
