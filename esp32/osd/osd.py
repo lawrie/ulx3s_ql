@@ -15,6 +15,7 @@ from machine import SPI, Pin, SDCard, Timer
 from micropython import const, alloc_emergency_exception_buf
 from uctypes import addressof
 from struct import unpack
+from time import sleep_ms
 import os
 import gc
 import ecp5
@@ -169,6 +170,7 @@ class osd:
     if filename:
       if filename.endswith(".mdv") or filename.endswith(".MDV"):
         self.diskfile = open(filename,"rb")
+        self.mdv_refill_buf()
         self.enable[0]=0
         self.osd_enable(0)
       if filename.endswith(".bit"):
@@ -393,8 +395,8 @@ class osd:
     if found:
       return i
     return 0
-
-  def mdv_read(self):
+  
+  def mdv_refill_buf(self):
     if self.mdv_skip_preamble(1000):
       self.diskfile.readinto(self.data_buf)
       i=0
@@ -402,16 +404,19 @@ class osd:
         self.mdv_skip_preamble(1000)
         self.diskfile.readinto(self.data_buf)
         i+=1
-      self.cs.on()
-      self.spi.write(self.spi_send_mdv_bram)
-      self.spi.write(self.data_buf[0:16])
-      self.spi.write(self.data_buf[28:32])
-      self.spi.write(self.data_buf[40:554])
-      self.cs.off()
       #print(self.data_buf[1],self.data_buf[2:12]) # block number, volume name
       #print(self.data_buf[0:16],self.data_buf[28:32],self.data_buf[40:44]) # block number, volume name
     else:
       print("MDV: preamble not found")
+
+  def mdv_read(self):
+    self.cs.on()
+    self.spi.write(self.spi_send_mdv_bram)
+    self.spi.write(self.data_buf[0:16])
+    self.spi.write(self.data_buf[28:32])
+    self.spi.write(self.data_buf[40:554])
+    self.cs.off()
+    self.mdv_refill_buf()
 
 
   # NOTE: this can be used for debugging
