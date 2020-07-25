@@ -399,6 +399,7 @@ class osd:
   def mdv_refill_buf(self):
     if self.mdv_skip_preamble(1000):
       self.diskfile.readinto(self.data_buf)
+      # skip block if header doesn't start with 0xFF
       i=0
       while self.data_buf[0]!=0xFF and i<254:
         self.mdv_skip_preamble(1000)
