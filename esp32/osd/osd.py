@@ -397,6 +397,11 @@ class osd:
   def mdv_read(self):
     if self.mdv_skip_preamble(1000):
       self.diskfile.readinto(self.data_buf)
+      i=0
+      while self.data_buf[0]!=0xFF and i<254:
+        self.mdv_skip_preamble(1000)
+        self.diskfile.readinto(self.data_buf)
+        i+=1
       self.cs.on()
       self.spi.write(self.spi_send_mdv_bram)
       self.spi.write(self.data_buf[0:16])
@@ -404,7 +409,7 @@ class osd:
       self.spi.write(self.data_buf[40:554])
       self.cs.off()
       #print(self.data_buf[1],self.data_buf[2:12]) # block number, volume name
-      #print(self.data_buf[0:16],self.data_buf[28:32],self.data_buf[40:44]) # block number, volume name
+      print(self.data_buf[0:16],self.data_buf[28:32],self.data_buf[40:44]) # block number, volume name
     else:
       print("MDV: preamble not found")
 
