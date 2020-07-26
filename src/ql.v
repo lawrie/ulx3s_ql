@@ -60,7 +60,7 @@ module ql
   output [7:0]  leds
 );
 
-  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 7.0); // gap is 7ms
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 15.0); // gap is 15ms
   
   localparam MDV_IDLE = 0;
   localparam MDV_GAP = 1;
@@ -234,7 +234,7 @@ module ql
   reg [7:0]   mctrl = 0;
   reg         mdv_present = 1;
   wire        mdv_gap_present = !mdv_present | mdv_gap;
-  reg [17:0]  gap_counter;
+  reg [18:0]  gap_counter;
   reg         gap_irq = 0;
 
   wire [7:0]  ipc_status = {ipc_ret[15], 3'b0, mdv_gap_present, mdv_rx_ready,
@@ -313,7 +313,7 @@ module ql
         gap_counter <= gap_counter + 1;
       end
     end else if (mdv_state == MDV_GAP) begin
-      mdv_req <= gap_counter == (c_gap_clk_count - 1);  // Request data
+      mdv_req <= gap_counter == 0;  // Request data
       if (gap_counter == (c_gap_clk_count -1)) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
