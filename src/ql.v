@@ -313,7 +313,7 @@ module ql
         gap_counter <= gap_counter + 1;
       end
     end else if (mdv_state == MDV_GAP) begin
-      mdv_req <= gap_counter < 8;  // Request data
+      mdv_req <= gap_counter == (c_gap_clk_count - 1);  // Request data
       if (gap_counter == (c_gap_clk_count -1)) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
