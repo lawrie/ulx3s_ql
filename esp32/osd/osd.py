@@ -411,6 +411,16 @@ class osd:
     else:
       print("MDV: preamble not found")
 
+  @micropython.viper
+  def mdv_checksum(self,a:int,b:int)->int:
+    p8b=ptr8(addressof(self.data_buf))
+    c=0xF0F
+    i=a
+    while i<b:
+      c+=p8b[i]
+      i+=1
+    return c&0xFFFF
+
   def mdv_read(self):
     if self.mdv_phase[0]:
       self.cs.on()
@@ -424,6 +434,10 @@ class osd:
       self.spi.write(self.data_buf[40:554])
       self.cs.off()
       self.mdv_refill_buf()
+      # fix checksum in broken MDV images
+      c=self.mdv_checksum(28,30)
+      self.data_buf[30]=c
+      self.data_buf[31]=c>>8
     self.mdv_phase[0]^=1
 
   # NOTE: this can be used for debugging
