@@ -423,21 +423,31 @@ class osd:
 
   def mdv_read(self):
     if self.mdv_phase[0]:
+      self.ctrl(8) # R_cpu_control[3]=1
       self.cs.on()
       self.spi.write(self.spi_send_mdv_bram)
       self.spi.write(self.data_buf[0:16])
       self.cs.off()
+      self.ctrl(0)
     else:
+      self.ctrl(8)
       self.cs.on()
       self.spi.write(self.spi_send_mdv_bram)
       self.spi.write(self.data_buf[28:32])
       self.spi.write(self.data_buf[40:554])
       self.cs.off()
+      self.ctrl(0)
       self.mdv_refill_buf()
       # fix checksum in broken MDV images
+      #c=self.mdv_checksum(0,14)
+      #self.data_buf[14]=c
+      #self.data_buf[15]=c>>8
       c=self.mdv_checksum(28,30)
       self.data_buf[30]=c
       self.data_buf[31]=c>>8
+      #c=self.mdv_checksum(40,552)
+      #self.data_buf[552]=c
+      #self.data_buf[553]=c>>8
     self.mdv_phase[0]^=1
 
   # NOTE: this can be used for debugging
