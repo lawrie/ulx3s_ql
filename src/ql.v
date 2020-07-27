@@ -60,7 +60,7 @@ module ql
   output [7:0]  leds
 );
 
-  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 1.0); // gap is 1ms
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 0.1); // gap is 0.1ms
   
   localparam MDV_IDLE = 0;
   localparam MDV_GAP = 1;
