@@ -60,7 +60,7 @@ module ql
   output [7:0]  leds
 );
 
-  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 15.0); // gap is 15ms
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 1.0); // gap is 1ms
   
   localparam MDV_IDLE = 0;
   localparam MDV_GAP = 1;
@@ -301,6 +301,13 @@ module ql
   reg [9:0] addr_max = 0;
 
   // Microdrive reads and status writes
+  wire mdv_busy=R_cpu_control[3];
+  reg mdv_ready, r_mdv_busy;
+  always @(posedge clk_cpu) begin
+    mdv_ready<=r_mdv_busy & ~mdv_busy;
+    r_mdv_busy<=mdv_busy;
+  end
+
   reg r_mdv_rd_cs;
   always @(posedge clk_cpu) begin
     r_mdv_rd_cs <= cpu_rw && mdv_cs;
@@ -314,7 +321,7 @@ module ql
       end
     end else if (mdv_state == MDV_GAP) begin
       mdv_req <= gap_counter == 0;  // Request data
-      if (gap_counter == (c_gap_clk_count -1)) begin
+      if (mdv_ready) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
 	gap_counter <= 0;
