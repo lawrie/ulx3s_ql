@@ -56,6 +56,8 @@ class osd:
     self.spi=SPI(self.spi_channel, baudrate=self.spi_freq, polarity=0, phase=0, bits=8, firstbit=SPI.MSB, sck=Pin(self.gpio_sck), mosi=Pin(self.gpio_mosi), miso=Pin(self.gpio_miso))
     self.cs=Pin(self.gpio_cs,Pin.OUT)
     self.cs.off()
+    self.led=Pin(self.gpio_led,Pin.OUT)
+    self.led.off()
 
 # init file browser
   def init_fb(self):
@@ -65,10 +67,11 @@ class osd:
 
   @micropython.viper
   def init_pinout_sd(self):
-    self.gpio_cs   = const(5)
+    self.gpio_cs   = const(17)
     self.gpio_sck  = const(16)
     self.gpio_mosi = const(4)
     self.gpio_miso = const(12)
+    self.gpio_led  = const(5)
 
   @micropython.viper
   def irq_handler(self, pin):
@@ -401,11 +404,11 @@ class osd:
     if self.mdv_skip_preamble(1000):
       self.diskfile.readinto(self.data_buf)
       # skip block if header doesn't start with 0xFF
-      i=0
-      while self.data_buf[0]!=0xFF and i<254:
-        self.mdv_skip_preamble(1000)
-        self.diskfile.readinto(self.data_buf)
-        i+=1
+      #i=0
+      #while self.data_buf[0]!=0xFF and i<254:
+      #  self.mdv_skip_preamble(1000)
+      #  self.diskfile.readinto(self.data_buf)
+      #  i+=1
       #print(self.data_buf[1],self.data_buf[2:12]) # block number, volume name
       #print(self.data_buf[0:16],self.data_buf[28:32],self.data_buf[40:44]) # block number, volume name
     else:
@@ -437,6 +440,7 @@ class osd:
       self.spi.write(self.data_buf[40:554])
       self.cs.off()
       self.ctrl(0)
+      self.led.on()
       self.mdv_refill_buf()
       # fix checksum in broken MDV images
       #c=self.mdv_checksum(0,14)
@@ -448,6 +452,7 @@ class osd:
       #c=self.mdv_checksum(40,552)
       #self.data_buf[552]=c
       #self.data_buf[553]=c>>8
+      self.led.off()
     self.mdv_phase[0]^=1
 
   # NOTE: this can be used for debugging
@@ -498,7 +503,7 @@ def peek(addr,length=1):
 def poke(addr,data):
   run.poke(addr,data)
 
-bitstream="/sd/ql/bitstreams/ulx3s_85f_ql.bit"
+bitstream="/sd/ql/bitstreams/ulx3s_12f_ql.bit"
 try:
   os.mount(SDCard(slot=3),"/sd")
   ecp5.prog(bitstream)

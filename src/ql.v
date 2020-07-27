@@ -31,8 +31,8 @@ module ql
   output        ftdi_rxd,
   input         wifi_txd,
   output        wifi_rxd,  // SPI from ESP32
-  input         wifi_gpio16,
-  input         wifi_gpio5,
+  input         wifi_gpio16, // sclk
+  input         wifi_gpio17, // cs
   output        wifi_gpio0,
 
   inout         sd_clk, sd_cmd,
@@ -60,7 +60,7 @@ module ql
   output [7:0]  leds
 );
 
-  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 0.1); // gap is 0.1ms
+  localparam c_gap_clk_count = $rtoi((c_mhz / 1000) * 1.0); // gap is 1ms
   
   localparam MDV_IDLE = 0;
   localparam MDV_GAP = 1;
@@ -321,13 +321,14 @@ module ql
       end
     end else if (mdv_state == MDV_GAP) begin
       mdv_req <= gap_counter == 0;  // Request data
+      //if (gap_counter == (c_gap_clk_count - 1)) begin
       if (mdv_ready) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
 	gap_counter <= 0;
 	mdv_addr <= 0;
       end else begin
-        gap_counter <= gap_counter +1;
+        gap_counter <= gap_counter + 1;
       end
     end
     // Selecting mdv1 starts reading the microdrive data
@@ -606,7 +607,7 @@ module ql
   spi_ram_btn_inst
   (
     .clk(clk_cpu),
-    .csn(~wifi_gpio5),
+    .csn(~wifi_gpio17),
     .sclk(wifi_gpio16),
     .mosi(sd_d[1]), // wifi_gpio4
     .miso(sd_d[2]), // wifi_gpio12
@@ -825,7 +826,7 @@ module ql
     .i_g(green),
     .i_b(blue ),
     .i_hsync(~hSync), .i_vsync(~vSync), .i_blank(~vga_de),
-    .i_csn(~wifi_gpio5), .i_sclk(wifi_gpio16), .i_mosi(sd_d[1]), // .o_miso(),
+    .i_csn(~wifi_gpio17), .i_sclk(wifi_gpio16), .i_mosi(sd_d[1]), // .o_miso(),
     .o_r(osd_vga_r), .o_g(osd_vga_g), .o_b(osd_vga_b),
     .o_hsync(osd_vga_hsync), .o_vsync(osd_vga_vsync), .o_blank(osd_vga_blank)
   );
