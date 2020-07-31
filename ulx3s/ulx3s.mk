@@ -14,12 +14,15 @@ $(BUILDDIR)/toplevel.json: $(VERILOG)
 	yosys -p "synth_ecp5 -abc9 -json $@" $^
 
 $(BUILDDIR)/%.config: $(PIN_DEF) $(BUILDDIR)/toplevel.json
-	nextpnr-ecp5 --${DEVICE} --package CABGA381 --freq 62 \
-        --timing-allow-fail \
+	nextpnr-ecp5 --${DEVICE} --package CABGA381 \
+ 	--timing-allow-fail \
         --textcfg  $@ --json $(filter-out $<,$^) --lpf $<
 
 $(BUILDDIR)/toplevel.bit: $(BUILDDIR)/toplevel.config
 	ecppack --compress $^ $@
+
+$(BUILDDIR)/flash.bit: $(BUILDDIR)/toplevel.config
+	ecppack --compress --spimode qspi --freq 62.0 $^ $@
 
 clean:
 	rm -rf ${BUILDDIR}
