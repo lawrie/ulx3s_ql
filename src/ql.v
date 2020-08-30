@@ -3,7 +3,6 @@ module ql
 #(
   parameter c_slowdown    = 0, // CPU clock slowdown 2^n times (try 20-22)
   parameter c_lcd_hex     = 1, // SPI LCD HEX decoder
-  parameter c_sdram       = 1, // 0: BRAM 32K,  1: SDRAM
   parameter c_vga_out     = 0, // 0: Just HDMI, 1: VGA and HDMI
   parameter c_diag        = 1, // 0: No LED diagnostcs, 1: LED diagnostics
   parameter c_acia_serial = 0, // 0: disabled, 1: ACIA serial
@@ -121,6 +120,10 @@ module ql
     begin
       assign acia_rxd = ftdi_txd;
       assign ftdi_rxd = acia_txd;
+    end
+    else
+    begin
+      assign acia_rxd = 0;
     end
     if(c_esp32_serial)
     begin
@@ -249,11 +252,11 @@ module ql
   reg [5:0]   bit_counter;
   reg [3:0]   ipc_cmd;
   reg [3:0]   ipc_state;
-  reg [2:0]   key_row;
-  reg [2:0]   key_col;
-  reg         key_shift;
-  reg         key_ctrl;
-  reg         key_alt;
+  wire [2:0]  key_row;
+  wire [2:0]  key_col;
+  wire        key_shift;
+  wire        key_ctrl;
+  wire        key_alt;
   reg         key_pressed;
   reg [6:0]   ipc_bits;
   reg [63:0]  ipc_sound;
@@ -468,8 +471,6 @@ module ql
   // Also set autovector for interrupts
   assign vpa_n = (!(cpu_a[17:15] == 3) | cpu_as_n) & !(cpu_fc0 & cpu_fc1 & cpu_fc2);
 
-  generate
-  if(c_sdram) // SDRAM as ROM and RAM, BRAM as video
   assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
                    timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
                    keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
@@ -477,15 +478,6 @@ module ql
                    mdv_cs            ? {mdv_dout, mdv_dout} :
                    cpu_a[19:18] == 0 ? ram_dout :
                                        0;
-  else // BRAM all
-  assign cpu_din = cpu_a[17:15] == 0 ? rom_dout :
-                   cpu_a[17:15] == 4 ? vga_dout :
-                   acia_cs           ? {8'd0, acia_dout} :
-                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) :
-                   keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
-                   cpu_a[17:15] == 5 ? ram_dout :
-                                       0;
-  endgenerate
 
   // Generate phi1 and phi2 clock enables for the CPU
   generate
@@ -662,10 +654,8 @@ module ql
   );
 
   // ===============================================================
-  // SDRAM or BRAM for rom
+  // SDRAM
   // ===============================================================
-  generate
-  if(c_sdram) begin
 
   wire we = spi_ram_word_wr;
   wire re = spi_ram_addr[31:24] == 8'h00 ? spi_ram_rd : 1'b0;
@@ -695,33 +685,6 @@ module ql
     .sd_ras (sdram_rasn),
     .sd_cas (sdram_casn)
   );
-  end
-  else
-  begin
-  gamerom #(.MEM_INIT_FILE("../roms/test.mem")) 
-  rom32 (
-    .clk(clk_cpu),
-    .we_b(spi_ram_word_wr), // used by OSD
-    .addr_b(spi_ram_addr[14:1]),
-    .din_b(ram_di),
-    .addr(R_cpu_control[1] ? spi_ram_addr[14:1] : cpu_a[14:1]),
-    .dout(rom_dout)
-  );
-  assign ram_do = rom_dout; // for SPI to read back what is written
-  // ===============================================================
-  // Ram
-  // ===============================================================
-  ram ram32 (
-    .clk(clk_cpu),
-    .addr(cpu_a[14:1]),
-    .din(cpu_dout),
-    .we(!cpu_rw && cpu_a[17:15] == 5),
-    .dout(ram_dout),
-    .ub(!cpu_uds_n),
-    .lb(!cpu_lds_n)
-  );
-  end
-  endgenerate
 
   // ===============================================================
   // Keyboard (not yet implemented)
@@ -794,6 +757,7 @@ module ql
 
   video vga (
     .clk(clk_vga),
+    .reset(reset),
     .vga_r(red),
     .vga_g(green),
     .vga_b(blue),
