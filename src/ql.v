@@ -214,10 +214,6 @@ module ql
   wire mdv_cs = !vma_n && cpu_a[6:1] == 17;                    // $18022/23
   wire tdata_cs = mdv_cs && !cpu_uds_n;                        // $18022
   wire display_cs = !vma_n && cpu_a[6:1] == 49;                // $18063
-  // Non_QL ports
-  wire acia_cs  = !vma_n && cpu_a[6:2] == 1;                   // $18005 and $18007
-  wire audio_cs = !vma_n && cpu_a[6:1] == 4;                   // $18009
-  wire keybd_cs = !vma_n && cpu_a[6:1] == 5;                   // $1800B
 
   wire [7:0]  acia_dout;
   wire [63:0] kbd_matrix;
@@ -260,7 +256,8 @@ module ql
   reg         key_pressed;
   reg [6:0]   ipc_bits;
   reg [63:0]  ipc_sound;
-  reg [9:0]   pitch;
+  reg [8:0]   pitch_low;
+  reg [8:0]   pitch_high;
   reg [14:0]  duration;
   reg [1:0]   audio_state;
   reg [10:0]  audio_scale;
@@ -448,7 +445,8 @@ module ql
             if (bit_counter == (ipc_bits - 1)) begin
               ipc_state <= 0;
               bit_counter <= 0;
-              pitch <= 10'd256 - sound_shift[63:56];
+              pitch_low <= (sound_shift[63:56] == 0 ? 256 : sound_shift[63:56]) + 8;
+              pitch_high <= (sound_shift[55:48] == 0 ? 256 : sound_shift[55:48]) + 8;
               duration <= beep_length;
               audio_state <= (beep_length == 0 ? 2 : 1);
               audio_scale <= 0;
@@ -471,9 +469,7 @@ module ql
   // Also set autovector for interrupts
   assign vpa_n = (!(cpu_a[17:15] == 3) | cpu_as_n) & !(cpu_fc0 & cpu_fc1 & cpu_fc2);
 
-  assign cpu_din = acia_cs           ? {8'd0, acia_dout} :
-                   timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
-                   keybd_cs          ? kbd_matrix[{cpu_a[9:7], 3'b0} + 7 -: 8] :
+  assign cpu_din = timer_cs          ? (cpu_a[1] ? timer[15:0] : timer[31:16]) : // $18000
                    ipcirq_cs         ? {ipc_status, irq_pending} : // $18020/18021
                    mdv_cs            ? {mdv_dout, mdv_dout} :
                    cpu_a[19:18] == 0 ? ram_dout :
@@ -554,12 +550,10 @@ module ql
   ACIA acia(
     .clk(clk_cpu),
     .reset(reset),
-    //.cs(acia_cs),
     .cs(tctrl_cs | tdata_cs),
     .e_clk(cpu_E),
     .rw_n(cpu_rw),
     .rs(tdata_cs),
-    //.data_in(cpu_dout[7:0]),
     .data_in(tctrl_cs ? 8'h01 : cpu_dout[15:8]), // Set output when anything is written to tctrl
     .data_out(acia_dout),
     .txclk(baudclk),
@@ -814,38 +808,13 @@ module ql
   // ===============================================================
   // Audio
   // ===============================================================
-  wire [3:0] sound_ao;
   wire audio_out;
-  //assign audio_l = sound_ao | {4{audio_out}};
   assign audio_l = {4{audio_out}};
   assign audio_r = audio_l;
-  wire sound_ready;
-  reg [10:0] div;
 
-  always @(posedge clk_cpu) begin
-    if (reset) div <= 0;
-    else begin
-      if (audio_state != 0) div <= div + 1;
-      else div <= 0;
-    end
-  end
-
-  sn76489 #(.AUDIO_RES(4),.DIVIDER(8)) audio (
+  tone_generator tone (
     .clk(clk_cpu),
-    .clk_en(fx68_phi1),
-    .reset(!pwr_up_reset_n),
-    .ce_n(1'b0),
-    .we_n(!audio_cs),
-    .ready(sound_ready),
-    .d(cpu_dout[7:0]),
-    .audio_out(sound_ao)
-  );
-
-  tone_generator #(0) tone (
-    .clk(clk_cpu),
-    .clk_div16_en(div[10]),
-    .reset(reset),
-    .freq(pitch),
+    .freq(audio_state == 0 ? 0 : pitch_low),
     .audio_out(audio_out)
   );
 

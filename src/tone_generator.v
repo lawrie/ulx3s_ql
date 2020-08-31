@@ -1,40 +1,29 @@
-module tone_generator
-  (
-   input       clk,
-   input       clk_div16_en,
-   input       reset,
-   input [9:0] freq,
-   output      audio_out
-   );
+module tone_generator (
+  input       clk,
+  input [8:0] freq,
+  output      audio_out
+);
 
-   reg [9:0]   count;
-   reg         tone;
+  parameter CLK_HZ = 27000000;
 
-   parameter init = 0;
+  reg [31:0]  count;
+  reg         tone;
+  wire [31:0] limit = ((CLK_HZ / 2) * freq);
    
-   // the datasheet suggests that the frequency register is loaded
-   // into a 10-bit counter and decremented until it hits 0
-   // however, this results in a half-period of FREQ+1!
-   always @(posedge clk or posedge reset)
-     if(reset)
-       begin
-          count <= init;
-          tone  <= 1'b0;
-       end
-     else if (clk_div16_en && freq != 0)
-       begin
-          if (count == 0)
-            begin
-               count <= freq;
-               tone  <= !tone;
-            end
-          else
-            begin
-               count <= count - 1'b1;
-            end
-       end
+  always @(posedge clk) begin
+    if (freq != 0) begin
+      if (count >= limit)  begin
+        count <= 0;
+        tone  <= !tone;
+      end else begin
+        count <= count + 11336;
+      end
+    end else begin
+      count <= 0;
+      tone <= 1'b0;
+    end
+  end
 
-   // assign output
-   assign audio_out = tone;
+  assign audio_out = tone;
 
 endmodule
