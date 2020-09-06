@@ -258,7 +258,15 @@ module ql
   reg [63:0]  ipc_sound;
   reg [8:0]   pitch_low;
   reg [8:0]   pitch_high;
+  reg [8:0]   pitch;
   reg [14:0]  duration;
+  reg [14:0]  step_duration;
+  reg [14:0]  step_counter;
+  signed reg [3:0]   step_inc;
+  reg        [3:0]   wrap;
+  reg        [3:0]   wrap_count;
+  reg [3:0]   random;
+  reg [3:0]   fuzz;
   reg [1:0]   audio_state;
   reg [10:0]  audio_scale;
 
@@ -325,7 +333,7 @@ module ql
       if (mdv_ready) begin
         mdv_state <= MDV_READING;
         mdv_gap <= 0;
-	gap_counter <= 0;
+        gap_counter <= 0;
 	mdv_addr <= 0;
       end else begin
         gap_counter <= gap_counter + 1;
@@ -351,7 +359,6 @@ module ql
     if (mdv_state == MDV_READING && !(cpu_rw && mdv_cs) && r_mdv_rd_cs) begin
       mdv_addr <= mdv_addr + 1;
       if (mdv_addr + 1 > addr_max) addr_max <= mdv_addr + 1;
-      if (mdv_addr == 14) diag16 <= mdv_dout;
       gap_counter <= 0; // Reset gap timer on reads
     end
   end
@@ -361,6 +368,7 @@ module ql
   wire [3:0] ipc_shift = {ipc_data[2:0], cpu_dout[1]};
   wire [63:0] sound_shift = {ipc_sound[62:0], cpu_dout[1]};
   wire [14:0] beep_length ={sound_shift[22:16], sound_shift[31:24]}; 
+  wire [14:0] beep_step_length ={sound_shift[38:32], sound_shift[47:40]}; 
   always @(posedge clk_cpu) begin
     if (reset) begin
       bit_counter <= 0;
@@ -372,6 +380,7 @@ module ql
       key_pressed <= 0;
       audio_state <= 0;
     end else begin
+      diag16 <= pitch;
       if (ps2_key[10] & ps2_key[9]) key_pressed <= 1;
       irq_ack <= 5'b0;
       r_ipcwr_cs <= ipcwr_cs;
@@ -448,17 +457,51 @@ module ql
               pitch_low <= (sound_shift[63:56] == 0 ? 256 : sound_shift[63:56]) + 8;
               pitch_high <= (sound_shift[55:48] == 0 ? 256 : sound_shift[55:48]) + 8;
               duration <= beep_length;
-              audio_state <= (beep_length == 0 ? 2 : 1);
-              audio_scale <= 0;
+              step_duration <= beep_step_length;
+              step_inc <= $signed(sound_shift[15:12]);
+              wrap <= sound_shift[11:8];
+              random <= sound_shift[7:4];
+              fuzz <= sound_shift[3:10];
+              audio_state <= 1;
             end
           end
         end
       end
-      if (audio_state == 1) begin
+      // Audio state machine
+      if (audio_state == 1) begin // Initialize audio
+        if (pitch_high <= pitch_low || step_inc == 0 || step_duration == 0) begin
+          step_duration <= 0;
+          step_inc <= 0;
+          pitch <= pitch_low;
+          pitch_high <= pitch_low;
+          wrap_count <= wrap;
+        end else begin
+          step_counter <= step_duration;
+          pitch <= (step_inc < 0 ? pitch_high : pitch_low);
+        end
+        audio_state <= duration == 0 ? 3 : 2;
+        audio_scale <= 0;
+      end else if (audio_state > 1) begin
         audio_scale <= audio_scale + 1;
         if (audio_scale == 1943) begin // 70us units
           if (duration != 0) duration <= duration - 1;
-          else audio_state <= 0;
+          else if (audio_state == 2) audio_state <= 0;
+          if (step_inc != 0) begin
+            if (step_counter == 0) begin
+              if ((step_inc > 0 && pitch + step_inc >= pitch_high) || (step_inc <= 0 && ($signed(pitch) + step_inc) <= $signed(pitch_low)))
+                if (wrap_count == 0) begin
+                  wrap_count <= wrap;
+                  step_inc <= -step_inc; 
+                  pitch <= (step_inc > 0) ? pitch_high : pitch_low; 
+                end else begin
+                  wrap_count <= wrap_count - 1;
+                  pitch <= step_inc > 0 ? pitch_low : pitch_high;
+                end
+              else
+                pitch <= $signed(pitch) + step_inc;
+              step_counter <= step_duration;
+            end else step_counter <= step_counter - 1;
+          end
           audio_scale <= 0;
         end
       end
@@ -814,7 +857,7 @@ module ql
 
   tone_generator tone (
     .clk(clk_cpu),
-    .freq(audio_state == 0 ? 0 : pitch_low),
+    .freq(audio_state < 2 ? 0 : pitch),
     .audio_out(audio_out)
   );
 
