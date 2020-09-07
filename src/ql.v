@@ -369,6 +369,12 @@ module ql
   wire [63:0] sound_shift = {ipc_sound[62:0], cpu_dout[1]};
   wire [14:0] beep_length ={sound_shift[22:16], sound_shift[31:24]}; 
   wire [14:0] beep_step_length ={sound_shift[38:32], sound_shift[47:40]}; 
+  reg [7:0] rand1;
+  reg [7:0] rand2;
+  wire feed1 = rand1[7] ^ rand1[3] ^ rand1[2] ^ rand1[1];
+  wire feed2 = rand2[7] ^ rand2[4] ^ rand2[2] ^ rand2[0];
+  wire [7:0] rand_bits = rand1 & (8'hff >> (8 - random[2:0]));
+  wire [7:0] fuzz_bits = fuzz[3] ? (rand2 & (8'hff >> (8 - fuzz[2:0]))) : 0;
   always @(posedge clk_cpu) begin
     if (reset) begin
       bit_counter <= 0;
@@ -379,8 +385,10 @@ module ql
       ipc_state <= 0;
       key_pressed <= 0;
       audio_state <= 0;
+      rand1 <= 8'hff;
+      rand2 <= 8'hff;
     end else begin
-      diag16 <= pitch;
+      diag16 <= {fuzz_bits, rand_bits};
       if (ps2_key[10] & ps2_key[9]) key_pressed <= 1;
       irq_ack <= 5'b0;
       r_ipcwr_cs <= ipcwr_cs;
@@ -461,12 +469,15 @@ module ql
               step_inc <= $signed(sound_shift[15:12]);
               wrap <= sound_shift[11:8];
               random <= sound_shift[7:4];
-              fuzz <= sound_shift[3:10];
+              fuzz <= sound_shift[3:0];
               audio_state <= 1;
             end
           end
         end
       end
+      // Random bits for audio
+      rand1 <= {rand1[6:0], feed1};
+      rand2 <= {rand2[6:0], feed2};
       // Audio state machine
       if (audio_state == 1) begin // Initialize audio
         if (pitch_high <= pitch_low || step_inc == 0 || step_duration == 0) begin
@@ -497,8 +508,9 @@ module ql
                   wrap_count <= wrap_count - 1;
                   pitch <= step_inc > 0 ? pitch_low : pitch_high;
                 end
-              else
-                pitch <= $signed(pitch) + step_inc;
+              else begin
+                pitch <= $signed(pitch) + step_inc + (random[3] ? $signed(rand_bits) : $signed(0));
+              end
               step_counter <= step_duration;
             end else step_counter <= step_counter - 1;
           end
@@ -857,7 +869,8 @@ module ql
 
   tone_generator tone (
     .clk(clk_cpu),
-    .freq(audio_state < 2 ? 0 : pitch),
+    .freq(audio_state < 2 ? 9'b0 : pitch),
+    .fuzz(fuzz_bits),
     .audio_out(audio_out)
   );
 
@@ -873,8 +886,9 @@ module ql
   reg [127:0] R_display;
   // HEX decoder does printf("%16X\n%16X\n", R_display[63:0], R_display[127:64]);
   always @(posedge clk_cpu)
-    R_display <= { 6'b0, addr_max, mdv_dout, 6'b0, mdv_addr, // 2nd HEX row
-                   1'b0, R_btn_joy, cpu_dout, cpu_din, cpu_a, 1'b0 }; // 1st HEX row
+    //R_display <= { 6'b0, addr_max, mdv_dout, 6'b0, mdv_addr, // 2nd HEX row
+    //               1'b0, R_btn_joy, cpu_dout, cpu_din, cpu_a, 1'b0 }; // 1st HEX row
+    R_display = {ipc_sound, ipc_sound};
 
   parameter C_color_bits = 16;
   wire [7:0] x;
